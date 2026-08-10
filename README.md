@@ -56,3 +56,25 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+=======
+# 🚀 JRP Website: E-register dan Validasi Polis
+
+Deskripsi singkat tentang project ini.
+
+*(Hapus tulisan ini, lalu drag & drop screenshot halaman websitemu di sini. Contoh: Halaman Login, Dashboard, dll)*
+
+## 🛠️ Teknologi yang Digunakan (Tech Stack)
+
+- **Backend:** Laravel
+- **Frontend:** React.js / Blade (Pilih yang sesuai), Tailwind CSS
+- **Database:** MySQL (Laragon)
+- **Environment:** Node.js, Vite
+
+## ✨ Fitur yang Sudah Berjalan
+
+- [x] Sistem Autentikasi (Login/Logout)
+- [x] Dashboard interaktif
+- [x] Manajemen Data (CRUD)
+- [ ] *Fitur yang masih dalam tahap pengerjaan (bisa dicentang nanti)*
+
+
