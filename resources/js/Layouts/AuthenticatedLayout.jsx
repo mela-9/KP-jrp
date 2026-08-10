@@ -146,6 +146,17 @@ export default function AuthenticatedLayout({ header, children }) {
                             </div>
                         </div>
 
+                    <div className="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
+                        <NavLink href={route('dashboard')} active={route().current('dashboard')}>
+                            Dashboard
+                            </NavLink>
+    
+                            {/* Tambahkan Menu E-Register AKD di sini */}
+                        <NavLink href={route('akd.index')} active={route().current('akd.*')}>
+                             E-Register AKD
+                            </NavLink>
+                        </div>
+
                         <div className="mt-3 space-y-1">
                             <ResponsiveNavLink href={route('profile.edit')}>
                                 Profile
