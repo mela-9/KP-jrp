@@ -35,12 +35,27 @@ class RegisteredUserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            'role' => 'required|string|in:staff,kepala_staff,agen',
         ]);
 
+        if ($request->role === 'kepala_staff') {
+            $existingActiveKepalaStaff = User::where('role', 'kepala_staff')
+                                               ->where('status', 'active')
+                                               ->exists();
+
+            if ($existingActiveKepalaStaff) {
+                return back()->withErrors([
+                    'role' => 'Pendaftaran ditolak. Saat ini sudah ada Kepala Staff yang aktif bertugas. Lakukan nonaktifkan akun terlebih dahulu melalui panel admin.'
+                ]);
+            }
+        }
+        
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
+            'role' => $request->role,
+            'status' => 'active', // Otomatis aktif saat terdaftar
         ]);
 
         event(new Registered($user));

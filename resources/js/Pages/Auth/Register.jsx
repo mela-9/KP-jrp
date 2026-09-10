@@ -11,6 +11,7 @@ export default function Register() {
         email: '',
         password: '',
         password_confirmation: '',
+        role: 'staff', // <-- Tambahkan default role di sini
     });
 
     const submit = (e) => {
@@ -28,7 +29,6 @@ export default function Register() {
             <form onSubmit={submit}>
                 <div>
                     <InputLabel htmlFor="name" value="Name" />
-
                     <TextInput
                         id="name"
                         name="name"
@@ -39,13 +39,11 @@ export default function Register() {
                         onChange={(e) => setData('name', e.target.value)}
                         required
                     />
-
                     <InputError message={errors.name} className="mt-2" />
                 </div>
 
                 <div className="mt-4">
                     <InputLabel htmlFor="email" value="Email" />
-
                     <TextInput
                         id="email"
                         type="email"
@@ -56,13 +54,29 @@ export default function Register() {
                         onChange={(e) => setData('email', e.target.value)}
                         required
                     />
-
                     <InputError message={errors.email} className="mt-2" />
+                </div>
+
+                {/* PILIHAN ROLE / PERAN */}
+                <div className="mt-4">
+                    <InputLabel htmlFor="role" value="Pilih Peran (Role)" />
+                    <select
+                        id="role"
+                        name="role"
+                        value={data.role}
+                        className="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm text-sm"
+                        onChange={(e) => setData('role', e.target.value)}
+                        required
+                    >
+                        <option value="staff">Staff Underwriting</option>
+                        <option value="kepala_staff">Kepala Staff Underwriting</option>
+                        <option value="agen">Agen / Petugas Lapangan</option>
+                    </select>
+                    <InputError message={errors.role} className="mt-2" />
                 </div>
 
                 <div className="mt-4">
                     <InputLabel htmlFor="password" value="Password" />
-
                     <TextInput
                         id="password"
                         type="password"
@@ -73,7 +87,6 @@ export default function Register() {
                         onChange={(e) => setData('password', e.target.value)}
                         required
                     />
-
                     <InputError message={errors.password} className="mt-2" />
                 </div>
 
@@ -82,7 +95,6 @@ export default function Register() {
                         htmlFor="password_confirmation"
                         value="Confirm Password"
                     />
-
                     <TextInput
                         id="password_confirmation"
                         type="password"
@@ -95,7 +107,6 @@ export default function Register() {
                         }
                         required
                     />
-
                     <InputError
                         message={errors.password_confirmation}
                         className="mt-2"
