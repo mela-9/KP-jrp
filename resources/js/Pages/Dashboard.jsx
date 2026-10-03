@@ -1,125 +1,180 @@
-import React from 'react';
+import React, { useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link } from '@inertiajs/react';
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import { Doughnut } from 'react-chartjs-2';
 
-export default function Dashboard({ auth }) {
-    // Daftar menu e-register diarahkan ke halaman informasi (.info) terlebih dahulu
-    const menus = [
-        {
-            title: 'Asuransi Kecelakaan Diri (AKD)',
-            description: 'Pelajari cakupan jaminan, panduan polis, dan akses buku besar AKD.',
-            route: 'akd.info',
-            color: 'border-blue-500 text-blue-600 bg-blue-50',
-            badge: 'AKD'
-        },
-        {
-            title: 'Property All Risk (PAR)',
-            description: 'Pelajari cakupan jaminan, panduan polis, dan akses buku besar PAR.',
-            route: 'par.info',
-            color: 'border-indigo-500 text-indigo-600 bg-indigo-50',
-            badge: 'PAR'
-        },
-        {
-            title: 'Kendaraan Bermotor',
-            description: 'Pelajari cakupan jaminan, panduan polis, dan akses buku besar Kendaraan.',
-            route: 'vehicle.info',
-            color: 'border-emerald-500 text-emerald-600 bg-emerald-50',
-            badge: 'VEH'
-        },
-        {
-            title: 'Aneka / Varia',
-            description: 'Pelajari cakupan jaminan, panduan polis, dan akses buku besar Varia.',
-            route: 'varia.info',
-            color: 'border-amber-500 text-amber-600 bg-amber-50',
-            badge: 'VAR'
-        },
-        {
-            title: 'Public Liability',
-            description: 'Pelajari cakupan jaminan, panduan polis, dan akses buku besar Public Liability.',
-            route: 'pl.info',
-            color: 'border-purple-500 text-purple-600 bg-purple-50',
-            badge: 'PL'
-        },
-        {
-            title: 'Surety Bond',
-            description: 'Pelajari cakupan jaminan, panduan polis, dan akses buku besar Surety Bond.',
-            route: 'surety.info',
-            color: 'border-rose-500 text-rose-600 bg-rose-50',
-            badge: 'SB'
-        },
-        {
-            title: 'Pusat Manajemen Nomor Surat',
-            description: 'Inventarisasi nomor surat lintas polis, pelacakan kertas rusak, & void secara terpusat.',
-            route: 'surat.index',
-            color: 'border-cyan-500 text-cyan-600 bg-cyan-50',
-            badge: 'SURAT'
-        },
-    ];
+ChartJS.register(ArcElement, Tooltip, Legend);
+
+export default function Dashboard({ auth, stats, suratBlocks, pendingRegisters = [] }) {
+    const [selectedCategory, setSelectedCategory] = useState(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+
+    const isKepalaStaff = auth.user.role === 'kepala_staff' || auth.user.email === 'kepstaff123@gmail.com';
+
+    const chartData = {
+        labels: ['Asuransi Kecelakaan Diri (AKD)', 'Property All Risk (PAR)', 'Vehicle (Kendaraan)', 'Varia (Aneka)', 'Public Liability (PL)', 'Surety Bond'],
+        datasets: [
+            {
+                data: [stats.akd, stats.par, stats.vehicle, stats.varia, stats.pl, stats.surety_bond],
+                backgroundColor: ['#1e3a8a', '#0d9488', '#d97706', '#7c3aed', '#db2777', '#4b5563'],
+                borderWidth: 2,
+                borderColor: '#ffffff',
+            },
+        ],
+    };
+
+    const handleChartClick = (event, elements) => {
+        if (elements.length > 0) {
+            const index = elements[0].index;
+            const categories = [
+                { name: 'Asuransi Kecelakaan Diri (AKD)', key: 'AKD', count: stats.akd },
+                { name: 'Property All Risk (PAR)', key: 'PAR', count: stats.par },
+                { name: 'Vehicle (Kendaraan)', key: 'VEHICLE', count: stats.vehicle },
+                { name: 'Varia (Aneka)', key: 'VARIA', count: stats.varia },
+                { name: 'Public Liability (PL)', key: 'PL', count: stats.pl },
+                { name: 'Surety Bond', key: 'SURETY', count: stats.surety_bond },
+            ];
+            setSelectedCategory(categories[index]);
+            setIsModalOpen(true);
+        }
+    };
+
+    const options = {
+        responsive: true,
+        maintainAspectRatio: false,
+        onClick: handleChartClick,
+        plugins: {
+            legend: {
+                position: 'bottom',
+                labels: { boxWidth: 12, font: { size: 11 } }
+            }
+        }
+    };
+
+    const filteredBlocks = suratBlocks && selectedCategory 
+        ? suratBlocks.filter(block => block.jenis_polis === selectedCategory.key)
+        : [];
 
     return (
         <AuthenticatedLayout
             user={auth.user}
-            header={
-                <h2 className="text-xl font-semibold leading-tight text-gray-800">
-                    Dashboard Utama JRP Care
-                </h2>
-            }
+            header={<h2 className="font-semibold text-xl text-gray-800 leading-tight">Dashboard Eksekutif E-Register</h2>}
         >
             <Head title="Dashboard" />
 
-            <div className="py-12">
-                <div className="mx-auto max-w-7xl sm:px-6 lg:px-8 space-y-6">
-                    
-                    {/* Welcome Banner */}
-                    <div className="overflow-hidden bg-white shadow-sm sm:rounded-lg p-6 border-l-4 border-blue-600 flex justify-between items-center">
+            <div className="py-6 max-w-7xl mx-auto space-y-6">
+                
+                {/* NOTIFIKASI KEPALA STAFF MENUJU HALAMAN APPROVAL KHUSUS */}
+                {isKepalaStaff && (
+                    <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-xl shadow-xs flex justify-between items-center">
                         <div>
-                            <h3 className="text-lg font-bold text-gray-800">Selamat datang kembali, {auth.user.name}! 👋</h3>
-                            <p className="text-sm text-gray-500 mt-1">
-                                Pilih salah satu modul E-Register di bawah ini untuk melihat informasi produk atau mengelola buku besar.
-                            </p>
+                            <h3 className="font-bold text-amber-900 text-sm">🔔 Panel Validasi Korporat Kepala Staff</h3>
+                            <p className="text-xs text-amber-700 mt-0.5">Kelola antrean berkas masuk dan tinjau riwayat audit trail melalui menu khusus di sidebar kiri.</p>
                         </div>
-                        <span className="hidden md:inline-block bg-gray-100 text-gray-600 text-xs font-semibold px-3 py-1 rounded-full">
-                            Role: {auth.user.role || 'Staff'}
-                        </span>
+                        <Link 
+                            href={route('kepala-staff.approvals')}
+                            className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-4 py-2 rounded-lg transition shadow-xs"
+                        >
+                            Buka Antrean Approval →
+                        </Link>
                     </div>
+                )}
 
-                    {/* Grid Menu Cards */}
+                {/* KARTU STATISTIK EKSEKUTIF */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="bg-white p-5 rounded-xl shadow-xs border-l-4 border-blue-900">
+                        <div className="text-xs font-bold uppercase text-gray-400">Total Keseluruhan Polis</div>
+                        <div className="text-3xl font-extrabold text-blue-900 mt-1">{stats.total} <span className="text-sm font-normal text-gray-500">Polis</span></div>
+                    </div>
+                    <div className="bg-white p-5 rounded-xl shadow-xs border-l-4 border-teal-600">
+                        <div className="text-xs font-bold uppercase text-gray-400">Akumulasi Bulan Aktif</div>
+                        <div className="text-3xl font-extrabold text-teal-600 mt-1">Juli - Okt</div>
+                    </div>
+                    {/* Kartu Sistem Gudang Surat / Nomor Terakhir Penggunaan */}
+<div className="bg-white p-6 rounded-2xl shadow-xs border border-slate-100 border-l-4 border-l-amber-500">
+    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">No. Terakhir Penggunaan Surat</p>
+    <div className="mt-2 flex items-baseline space-x-2">
+        <span className="text-xl font-extrabold text-slate-800 font-mono">
+            J1: {stats?.jalur1 || 0} | J2: {stats?.jalur2 || 0}
+        </span>
+    </div>
+    <p className="text-[10px] text-slate-500 mt-1">Akumulasi alokasi kedua jalur gudang</p>
+</div>
+                    <div className="bg-white p-5 rounded-xl shadow-xs border-l-4 border-purple-600">
+                        <div className="text-xs font-bold uppercase text-gray-400">Hak Akses Aktif</div>
+                        <div className="text-xl font-bold text-purple-700 mt-2 uppercase">{auth.user.role || 'Staff / Pimpinan'}</div>
+                    </div>
+                </div>
+
+                {/* GRAFIK DONAT (MELEBAR PENUH) */}
+                <div className="bg-white p-6 rounded-xl shadow-xs flex flex-col justify-between">
                     <div>
-                        <h3 className="text-md font-bold text-gray-700 mb-4 px-1">Menu JRP Care / Modul E-Register</h3>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                            {menus.map((menu, index) => (
-                                <Link
-                                    key={index}
-                                    href={route(menu.route)}
-                                    className="bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 p-6 border border-gray-100 flex flex-col justify-between group hover:-translate-y-1"
-                                >
-                                    <div>
-                                        <div className="flex justify-between items-center mb-3">
-                                            <span className={`text-xs font-extrabold px-2.5 py-1 rounded-md ${menu.color}`}>
-                                                {menu.badge}
-                                            </span>
-                                            <span className="text-gray-300 group-hover:text-blue-600 transition font-bold">
-                                                &rarr;
-                                            </span>
-                                        </div>
-                                        <h4 className="font-bold text-gray-800 group-hover:text-blue-600 transition text-base">
-                                            {menu.title}
-                                        </h4>
-                                        <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-                                            {menu.description}
-                                        </p>
-                                    </div>
-                                    <div className="mt-6 pt-3 border-t border-gray-50 flex items-center text-xs font-semibold text-blue-600">
-                                        Lihat Informasi Modul &rarr;
-                                    </div>
-                                </Link>
-                            ))}
-                        </div>
+                        <h3 className="font-bold text-gray-800 text-lg">Proporsi Registrasi Polis Berdasarkan Jenis</h3>
+                        <p className="text-xs text-gray-500 mt-1">Klik pada irisan diagram untuk melihat rincian status gudang dan alokasi nomor surat.</p>
                     </div>
-
+                    <div className="relative h-80 w-full my-4 flex justify-center items-center">
+                        <Doughnut data={chartData} options={options} />
+                    </div>
                 </div>
             </div>
+
+            {/* MODAL RINCIAN DONUT CHART & GUDANG SURAT */}
+            {isModalOpen && selectedCategory && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl p-6 space-y-4">
+                        <div className="flex justify-between items-center border-b pb-3">
+                            <h3 className="font-bold text-base text-blue-900">📊 Rincian Gudang & Polis: {selectedCategory.name}</h3>
+                            <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-red-600 font-bold text-xl">&times;</button>
+                        </div>
+                        
+                        <div className="space-y-3 text-xs text-gray-600">
+                            <div className="bg-blue-50 p-3 rounded-lg flex justify-between items-center">
+                                <span className="font-semibold text-gray-700">Total Polis Terdaftar di Database:</span>
+                                <span className="font-bold text-blue-900 text-sm">{selectedCategory.count} Polis</span>
+                            </div>
+
+                            <div className="border-t pt-2">
+                                <span className="font-bold text-gray-700 uppercase tracking-wide">Status Stok Blok Nomor Surat (Gudang):</span>
+                                <div className="mt-2 space-y-2 max-h-60 overflow-y-auto">
+                                    {filteredBlocks.length > 0 ? (
+                                        filteredBlocks.map((block) => {
+                                            const totalKuota = block.range_end - block.range_start + 1;
+                                            const sisa = totalKuota - block.terpakai;
+                                            return (
+                                                <div key={block.id} className="bg-slate-50 border p-3 rounded-lg space-y-1">
+                                                    <div className="flex justify-between font-bold text-slate-800">
+                                                        <span>Pakem: {block.kode_pakem} (Jalur {block.jalur})</span>
+                                                        <span className="text-blue-900">Tahun {block.tahun}</span>
+                                                    </div>
+                                                    <div className="text-slate-500 flex justify-between">
+                                                        <span>Rentang: {String(block.range_start).padStart(4, '0')} s.d {String(block.range_end).padStart(4, '0')}</span>
+                                                        <span className="font-semibold text-emerald-700">Terpakai: {block.terpakai} | Sisa: {sisa} Lembar</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    ) : (
+                                        <div className="p-3 bg-gray-50 rounded text-center text-gray-400 italic">
+                                            Belum ada blok surat gudang yang didaftarkan untuk lini produk ini.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="bg-amber-50 p-2.5 rounded border border-amber-200 text-amber-800 text-[11px]">
+                                ℹ️ Penomoran surat ditarik secara berurutan murni dari gudang untuk mencegah duplikasi data.
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end pt-2 border-t">
+                            <button onClick={() => setIsModalOpen(false)} className="bg-blue-900 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-blue-800 transition">
+                                Tutup Rincian
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </AuthenticatedLayout>
     );
 }

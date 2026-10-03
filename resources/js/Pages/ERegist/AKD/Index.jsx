@@ -1,438 +1,422 @@
-import * as XLSX from 'xlsx';
 import React, { useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, useForm, router, usePage } from '@inertiajs/react';
+import { Head, useForm, router } from '@inertiajs/react';
+import RegisterWorkflowActions from '@/Components/RegisterWorkflowActions';
 
-export default function AkdIndex({ auth, akdData = [], stats = { total: 0, pending_paraf: 0, siap_serah: 0, selesai: 0 } }) {
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isTerimaModalOpen, setIsTerimaModalOpen] = useState(false);
-    const [selectedAkdId, setSelectedAkdId] = useState(null);
+export default function Index({ auth, akdData, autoNumbers, filters }) {
+    const [showModal, setShowModal] = useState(false);
+    const [showDetailModal, setShowDetailModal] = useState(false);
+    const [selectedItem, setSelectedItem] = useState(null);
+    const [isEditing, setIsEditing] = useState(false); // Mode edit saat tombol Change di klik dalam modal rincian
 
-    const role = auth.user.role;
+    const [search, setSearch] = useState(filters.search || '');
+    const [selectedMonth, setSelectedMonth] = useState(filters?.bulan || '');
 
-    // Form Utama Input Polis (Staff)
+    // Form state untuk Input Polis Baru
     const { data, setData, post, processing, reset, errors } = useForm({
-        tgl_input: '',
+        tgl_input: new Date().toISOString().split('T')[0],
         nama_tertanggung: '',
-        no_surat: '',
-        no_polis: '',
-        periode_awal: '',
-        periode_akhir: '',
+        no_surat: autoNumbers?.no_surat || '',
+        no_polis: autoNumbers?.no_polis || '',
+        jumlah_halaman: 1,
+        periode_awal: new Date().toISOString().split('T')[0],
+        periode_akhir: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
         tsi_ab: '',
-        tsi_c: '',
-        tsi_d: '',
-        tsi_e: '',
         premi: '',
-        sumber_bisnis: '',
-        scan_polis: null
+        scan_polis: null,
+        kondisi_surat: 'Normal',
+        keterangan_audit: '',
     });
 
-    // INI YANG BIKIN BLANK KEMARIN KARENA KETINGGALAN
-    const terimaForm = useForm({
-        bukti_terima: null
+    // Form state untuk Modal Rincian & Change Audit
+    const { data: detailData, setData: setDetailData, put, processing: detailProcessing } = useForm({
+        kondisi_surat: 'Normal',
+        alasan_ubah: '',
+        nomor_surat_array: [],
+        jalur_parsial_tambahan: '',
     });
 
-    const handlePrint = () => window.print();
-    
-    const handleExport = () => {
-        if (!akdData || akdData.length === 0) {
-            alert("Belum ada data untuk diekspor!");
-            return;
-        }
+    // Handler pencarian real-time
+    const handleSearchChange = (e) => {
+        const querySearch = e.target.value;
+        setSearch(querySearch);
 
-        const dataToExport = akdData.map((item, index) => ({
-            "No": index + 1,
-            "Tanggal Input": item.tgl_input,
-            "Nama Tertanggung": item.nama_tertanggung,
-            "No. Surat (NS)": item.no_surat,
-            "No. Polis": item.no_polis,
-            "Periode Awal": item.periode_awal,
-            "Periode Akhir": item.periode_akhir,
-            "TSI A/B (Rp)": Number(item.tsi_ab),
-            "TSI C (Rp)": Number(item.tsi_c),
-            "TSI D (Rp)": Number(item.tsi_d),
-            "TSI E (Rp)": Number(item.tsi_e),
-            "Total Premi (Rp)": Number(item.premi),
-            "Sumber / Agen": item.sumber_bisnis,
-            "Status Approval": item.status_approval,
-            "Status Serah Terima": item.status_serah_terima,
-        }));
-
-        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Buku Besar AKD");
-        XLSX.writeFile(workbook, "E_Register_AKD_Export.xlsx");
+        router.get(
+            window.location.pathname, 
+            { search: querySearch, bulan: selectedMonth }, 
+            { preserveState: true, replace: true }
+        );
     };
 
-    const submitForm = (e) => {
+    // Handler ganti bulan
+    const handleMonthChange = (e) => {
+        const queryBulan = e.target.value;
+        setSelectedMonth(queryBulan);
+
+        router.get(
+            window.location.pathname,
+            { search: search, bulan: queryBulan },
+            { preserveState: true, replace: true }
+        );
+    };
+
+    const submit = (e) => {
         e.preventDefault();
         post(route('akd.store'), {
             onSuccess: () => {
-                setIsModalOpen(false);
+                setShowModal(false);
                 reset();
             },
         });
     };
 
-    const submitKonfirmasiTerima = (e) => {
-        e.preventDefault();
-        
-        terimaForm.post(route('akd.terima', selectedAkdId), {
-            forceFormData: true,
-            preserveScroll: true,
-            onSuccess: () => {
-                setIsTerimaModalOpen(false);
-                terimaForm.reset();
-                setSelectedAkdId(null);
-            },
+    // Membuka Modal Rincian Bersih
+    const openDetailModal = (item) => {
+        setSelectedItem(item);
+        setIsEditing(false); // Default awal hanya melihat rincian
+        setDetailData({
+            kondisi_surat: item.kondisi_surat || 'Normal',
+            alasan_ubah: item.keterangan_audit || '',
+            nomor_surat_array: item.nomor_surat_array || [],
+            jalur_parsial_tambahan: '',
         });
+        setShowDetailModal(true);
     };
-    
-    const getRoleBadge = () => {
-        if (role === 'staff') return <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded">Mode: Staff (Operasional)</span>;
-        if (role === 'kepala_staff') return <span className="bg-amber-100 text-amber-800 text-xs font-semibold px-2.5 py-0.5 rounded">Mode: Kepala Staff (Otorisasi)</span>;
-        if (role === 'agen') return <span className="bg-emerald-100 text-emerald-800 text-xs font-semibold px-2.5 py-0.5 rounded">Mode: Agen (Lapangan)</span>;
-        return null;
+
+    const handleChangeSubmit = (e) => {
+        e.preventDefault();
+        router.put(route('akd.update-surat', selectedItem.id), {
+            kondisi_surat: detailData.kondisi_surat,
+            alasan_ubah: detailData.alasan_ubah,
+            nomor_surat_array: detailData.nomor_surat_array,
+        }, {
+            onSuccess: () => {
+                setShowDetailModal(false);
+                setIsEditing(false);
+            }
+        });
     };
 
     return (
-       <AuthenticatedLayout
-            user={auth.user}
-            header={
-                <div className="flex justify-between items-center">
-                    <h2 className="font-semibold text-xl text-gray-800 leading-tight">E-Register Polis: Asuransi Kecelakaan Diri (AKD)</h2>
-                    {getRoleBadge()}
-                </div>
-            }
+        <AuthenticatedLayout user={auth.user} header={<h2 className="font-semibold text-xl text-slate-800">Buku Besar: Asuransi Kecelakaan Diri (AKD)</h2>}>
+            <Head title="Buku Besar AKD" />
+
+            <div className="flex flex-col lg:flex-row justify-between items-center bg-white p-4 rounded-xl shadow-xs border border-slate-200 gap-4">
+    {/* KIRI: Judul & Deskripsi */}
+    <div className="w-full lg:w-auto">
+        <h3 className="font-bold text-slate-800 text-sm">Register Fisik Digital - AKD</h3>
+        <p className="text-xs text-slate-500">Pencatatan berurutan sesuai alokasi gudang surat resmi PT Asuransi Jasaraharja Putera.</p>
+    </div>
+
+    {/* KANAN: Search, Filter, dan Button */}
+    <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
+        
+        {/* Search Input */}
+        <input
+            type="text"
+            placeholder="Cari No. Surat / Polis / Tertanggung..."
+            value={search}
+            onChange={handleSearchChange}
+            className="w-full sm:w-64 px-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+        />
+
+        {/* Wrapper Filter Bulan */}
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+            <span className="text-sm text-slate-600 font-medium whitespace-nowrap hidden md:block">
+                Filter Bulan:
+            </span>
+            <select
+                value={selectedMonth}
+                onChange={handleMonthChange}
+                className="w-full sm:w-auto border border-slate-200 rounded-lg text-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
+            >
+                <option value="">Semua Bulan</option>
+                <option value="01">Januari</option>
+                <option value="02">Februari</option>
+                <option value="03">Maret</option>
+                <option value="04">April</option>
+                <option value="05">Mei</option>
+                <option value="06">Juni</option>
+                <option value="07">Juli</option>
+                <option value="08">Agustus</option>
+                <option value="09">September</option>
+                <option value="10">Oktober</option>
+                <option value="11">November</option>
+                <option value="12">Desember</option>
+            </select>
+        </div>
+
+        {/* Tombol Input Polis Baru */}
+        <button 
+            onClick={() => setShowModal(true)}
+            className="w-full sm:w-auto bg-[#1e3a8a] hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition duration-150"
         >
-            <Head title="E-Register AKD" />
+            + Input Polis Baru
+        </button>
+    </div>
+</div>
+                <div className="bg-white rounded-xl shadow-xs border border-slate-300 overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-[11px] border-collapse min-w-[1550px]">
+                            <thead>
+                                <tr className="bg-blue-950 text-white uppercase tracking-wider text-[10px] text-center border-b border-blue-900">
+                                    <th className="p-2.5 border-r border-blue-900 w-12">No.</th>
+                                    <th className="p-2.5 border-r border-blue-900 w-28">COB / TOC</th>
+                                    <th className="p-2.5 border-r border-blue-900 w-48">Tertanggung & Alamat</th>
+                                    <th className="p-2.5 border-r border-blue-900 w-44">No. Polis</th>
+                                    <th className="p-2.5 border-r border-blue-900 w-40">Periode</th>
+                                    <th className="p-2.5 border-r border-blue-900 w-36">TSI A/B</th>
+                                    <th className="p-2.5 border-r border-blue-900 w-16">Share</th>
+                                    <th className="p-2.5 border-r border-blue-900 w-32">Premi (IDR)</th>
+                                    <th className="p-2.5 border-r border-blue-900 w-28">Tgl Input</th>
+                                    <th className="p-2.5 border-r border-blue-900 w-28">Agen / Broker</th>
+                                    <th className="p-2.5 border-r border-blue-900 w-32">PIC Branch Office</th>
+                                    <th className="p-2.5 border-r border-blue-900 w-36">Telp / Kontak</th>
+                                    <th className="p-2.5 border-r border-blue-900 w-36">No. Surat & Kertas</th>
+                                    <th className="p-2.5">Status & Audit</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-300 text-slate-800">
+                                {akdData && akdData.length > 0 ? (
+                                    akdData.map((item, index) => (
+                                        <tr key={item.id} className="hover:bg-blue-50/50 transition">
+                                            <td className="p-2.5 border-r border-slate-200 text-center font-medium bg-slate-50">{index + 1}</td>
+                                            <td className="p-2.5 border-r border-slate-200 font-semibold text-blue-900">JP ASPRI</td>
+                                            <td className="p-2.5 border-r border-slate-200">
+                                                <div className="font-bold text-slate-900">{item.nama_tertanggung}</div>
+                                                <div className="text-[10px] text-slate-500">Palembang, Sumatera Selatan</div>
+                                            </td>
+                                            <td className="p-2.5 border-r border-slate-200 font-mono">
+                                                <div className="text-blue-900 font-bold text-xs">{item.no_polis}</div>
+                                            </td>
+                                            <td className="p-2.5 border-r border-slate-200 text-slate-600">
+                                                {item.periode_awal} s.d <br />{item.periode_akhir}
+                                            </td>
+                                            <td className="p-2.5 border-r border-slate-200 font-mono text-[10px]">
+                                                <div>Rp {Number(item.tsi_ab || 0).toLocaleString('id-ID')}</div>
+                                            </td>
+                                            <td className="p-2.5 border-r border-slate-200 text-center font-semibold">100%</td>
+                                            <td className="p-2.5 border-r border-slate-200 font-mono font-bold text-right text-slate-900">
+                                                Rp {Number(item.premi || 0).toLocaleString('id-ID')}
+                                            </td>
+                                            <td className="p-2.5 border-r border-slate-200 text-center">{item.tgl_input}</td>
+                                            <td className="p-2.5 border-r border-slate-200 text-center">Direct</td>
+                                            <td className="p-2.5 border-r border-slate-200 font-medium">Yusup Lambir</td>
+                                            <td className="p-2.5 border-r border-slate-200 text-slate-500 text-[10px]">
+                                                {item.kontak || '-'}
+                                            </td>
+                                            
+                                            {/* KOLOM NO. SURAT: TOMBOL RINCIAN */}
+                                            <td className="p-2.5 border-r border-slate-200 text-center">
+                                                <div className="flex flex-col items-center justify-center space-y-1.5">
+                                                    <button 
+                                                        onClick={() => openDetailModal(item)}
+                                                        className="bg-blue-900 hover:bg-blue-800 text-white font-bold px-3 py-1 rounded text-[11px] transition shadow-xs flex items-center space-x-1"
+                                                    >
+                                                        <span>🔍 Rincian ({item.nomor_surat_array?.length || 1} lbr)</span>
+                                                    </button>
+                                                </div>
+                                            </td>
 
-            <div className="py-12">
-                <div className="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
-
-                    {usePage().props.flash?.success && (
-                        <div className="bg-emerald-100 border border-emerald-400 text-emerald-700 px-4 py-3 rounded relative shadow-sm">
-                            <span className="block sm:inline font-medium text-sm">🔔 {usePage().props.flash.success}</span>
-                        </div>
-                    )}
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 print:hidden">
-                        <div className="bg-white p-5 rounded-lg shadow-sm border-l-4 border-blue-500">
-                            <div className="text-sm font-medium text-gray-500">Total Buku Besar AKD</div>
-                            <div className="text-2xl font-bold text-gray-800 mt-1">{stats.total} Polis</div>
-                            <div className="text-xs text-gray-400 mt-1">Seluruh data tercatat di sistem</div>
-                        </div>
-
-                        <div className={`bg-white p-5 rounded-lg shadow-sm border-l-4 ${role === 'kepala_staff' ? 'border-amber-500 bg-amber-50/30' : 'border-purple-500'}`}>
-                            <div className="text-sm font-medium text-gray-500">Menunggu Paraf (Pending)</div>
-                            <div className="text-2xl font-bold text-amber-600 mt-1">{stats.pending_paraf} Polis</div>
-                            <div className="text-xs text-gray-400 mt-1">
-                                {role === 'kepala_staff' ? '⚠️ Butuh tindakan paraf digital segera!' : 'Belum disetujui Kepala Staff'}
-                            </div>
-                        </div>
-
-                        <div className={`bg-white p-5 rounded-lg shadow-sm border-l-4 ${role === 'agen' ? 'border-emerald-500 bg-emerald-50/30' : 'border-emerald-500'}`}>
-                            <div className="text-sm font-medium text-gray-500">Siap Diterima / Proses</div>
-                            <div className="text-2xl font-bold text-emerald-600 mt-1">{stats.siap_serah} Polis</div>
-                            <div className="text-xs text-gray-400 mt-1">
-                                {role === 'agen' ? '📋 Polis siap diambil & upload tanda terima' : 'Dalam proses penyerahan lapangan'}
-                            </div>
-                        </div>
+                                            <td className="p-2.5 text-center font-mono text-[10px] bg-slate-50 space-y-1">
+                                                <div>
+                                                    {item.kondisi_surat === 'Normal' && <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">Normal</span>}
+                                                    {item.kondisi_surat === 'Rusak' && <span className="bg-red-100 text-red-800 px-2 py-0.5 rounded text-[10px] font-bold">Rusak</span>}
+                                                    {item.kondisi_surat === 'Parsial' && <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">Parsial</span>}
+                                                </div>
+                                                <RegisterWorkflowActions item={item} type="AKD" />
+                                            </td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan="14" className="p-6 text-center text-slate-400 italic">Belum ada data pada bulan ini.</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
                     </div>
+                </div>
+    
 
-                    <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
-                        <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-2 print:hidden">
-                            <div>
-                                <h3 className="text-lg font-bold text-gray-700">Daftar Register Polis AKD</h3>
-                                <p className="text-xs text-gray-500">
-                                    {role === 'staff' && "Anda memiliki hak akses untuk menginput polis baru ke sistem."}
-                                    {role === 'kepala_staff' && "Periksa data di bawah dan berikan paraf digital untuk pengesahan polis."}
-                                    {role === 'agen' && "Konfirmasi penerimaan polis dengan melampirkan lembar Delivery Receipt fisik."}
-                                </p>
+            {/* MODAL INPUT POLIS BARU */}
+            {showModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-center border-b pb-3">
+                            <h3 className="font-bold text-base text-blue-900">➕ Input Polis Baru - AKD</h3>
+                            <button onClick={() => setShowModal(false)} className="text-gray-400 font-bold text-xl">&times;</button>
+                        </div>
+
+                        <form onSubmit={submit} className="space-y-3 text-xs">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block font-semibold mb-1">Tanggal Input</label>
+                                    <input type="date" value={data.tgl_input} onChange={e => setData('tgl_input', e.target.value)} className="w-full border rounded-lg p-2" required />
+                                </div>
+                                <div>
+                                    <label className="block font-semibold mb-1">Nama Tertanggung</label>
+                                    <input type="text" placeholder="Contoh: PT Sinar Mas" value={data.nama_tertanggung} onChange={e => setData('nama_tertanggung', e.target.value)} className="w-full border rounded-lg p-2" required />
+                                </div>
                             </div>
 
-                            <div className="space-x-2 flex">
-                                <button onClick={handleExport} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded text-xs">
-                                    Export Excel
-                                </button>
-                                <button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded text-xs">
-                                    Print / PDF
-                                </button>
-                                
-                                {role === 'staff' && (
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block font-semibold mb-1">Nomor Polis</label>
+                                    <input type="text" value={data.no_polis} onChange={e => setData('no_polis', e.target.value)} className="w-full border rounded-lg p-2 font-mono bg-slate-50" required />
+                                </div>
+                                <div>
+                                    <label className="block font-semibold mb-1">Nomor Surat Utama (Gudang)</label>
+                                    <input type="text" value={data.no_surat} onChange={e => setData('no_surat', e.target.value)} className="w-full border rounded-lg p-2 font-mono bg-slate-50" required />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block font-semibold mb-1">Jumlah Halaman Surat Fisik (1 - 5 lembar)</label>
+                                <input type="number" min="1" max="5" value={data.jumlah_halaman} onChange={e => setData('jumlah_halaman', e.target.value)} className="w-full border rounded-lg p-2" required />
+                                <span className="text-[10px] text-slate-500">Sistem otomatis mengalokasikan nomor surat berurutan sesuai jumlah halaman.</span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block font-semibold mb-1">Periode Awal</label>
+                                    <input type="date" value={data.periode_awal} onChange={e => setData('periode_awal', e.target.value)} className="w-full border rounded-lg p-2" required />
+                                </div>
+                                <div>
+                                    <label className="block font-semibold mb-1">Periode Akhir</label>
+                                    <input type="date" value={data.periode_akhir} onChange={e => setData('periode_akhir', e.target.value)} className="w-full border rounded-lg p-2" required />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block font-semibold mb-1">TSI A/B (IDR)</label>
+                                    <input type="number" placeholder="50000000" value={data.tsi_ab} onChange={e => setData('tsi_ab', e.target.value)} className="w-full border rounded-lg p-2" />
+                                </div>
+                                <div>
+                                    <label className="block font-semibold mb-1">Premi (IDR)</label>
+                                    <input type="number" placeholder="1500000" value={data.premi} onChange={e => setData('premi', e.target.value)} className="w-full border rounded-lg p-2" />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block font-semibold mb-1">Scan Polis (PDF/Gambar)</label>
+                                <input type="file" onChange={e => setData('scan_polis', e.target.files[0])} className="w-full border rounded-lg p-2 text-xs" />
+                            </div>
+
+                            <div className="flex justify-end space-x-2 pt-3 border-t">
+                                <button type="button" onClick={() => setShowModal(false)} className="bg-gray-300 text-gray-700 font-bold px-4 py-2 rounded-lg">Batal</button>
+                                <button type="submit" disabled={processing} className="bg-blue-900 hover:bg-blue-800 text-white font-bold px-4 py-2 rounded-lg">Simpan & Potong Kuota Gudang</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL RINCIAN & FORM AUDIT PERUBAHAN */}
+            {showDetailModal && selectedItem && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-center border-b pb-3">
+                            <h3 className="font-bold text-base text-blue-900">📋 Rincian & Audit Nomor Surat Polis</h3>
+                            <button onClick={() => setShowDetailModal(false)} className="text-gray-400 font-bold text-xl">&times;</button>
+                        </div>
+
+                        <div className="space-y-3 text-xs">
+                            <div className="bg-slate-50 p-3 rounded-lg border space-y-1">
+                                <div><span className="font-semibold text-slate-500">No. Polis:</span> <span className="font-mono font-bold text-blue-900 text-sm">{selectedItem.no_polis}</span></div>
+                                <div><span className="font-semibold text-slate-500">Nama Tertanggung:</span> <span className="font-bold">{selectedItem.nama_tertanggung}</span></div>
+                                <div><span className="font-semibold text-slate-500">Status Saat Ini:</span> <span className="font-bold uppercase text-amber-700">{selectedItem.kondisi_surat}</span></div>
+                                {selectedItem.keterangan_audit && <div><span className="font-semibold text-slate-500">Catatan Audit:</span> <span className="text-slate-700 italic">{selectedItem.keterangan_audit}</span></div>}
+                            </div>
+
+                            {/* Daftar Rentang Nomor Surat Terpakai */}
+                            <div>
+                                <label className="block font-semibold text-slate-700 mb-1">Rentang Nomor Surat Fisik Terpakai:</label>
+                                <div className="space-y-2">
+                                    {Array.isArray(selectedItem.nomor_surat_array) && selectedItem.nomor_surat_array.map((noSurat, idx) => (
+                                        <div key={idx} className="flex items-center space-x-2">
+                                            <span className="bg-slate-200 px-2 py-1 rounded text-[10px] font-mono">Halaman {idx + 1}</span>
+                                            <input 
+                                                type="text" 
+                                                value={noSurat} 
+                                                disabled={!isEditing}
+                                                className="w-full border rounded-lg p-2 text-xs font-mono bg-slate-100" 
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Bagian Form Edit / Change */}
+                            {isEditing && (
+                                <form onSubmit={handleChangeSubmit} className="space-y-3 border-t pt-3">
+                                    <div>
+                                        <label className="block font-semibold mb-1">Ubah Kondisi / Status</label>
+                                        <select 
+                                            value={detailData.kondisi_surat} 
+                                            onChange={e => setDetailData('kondisi_surat', e.target.value)} 
+                                            className="w-full border rounded-lg p-2 text-xs font-bold bg-amber-50"
+                                        >
+                                            <option value="Normal">Normal</option>
+                                            <option value="Rusak">Rusak (Void / Kertas Robek)</option>
+                                            <option value="Parsial">Parsial (Lintas Jalur / Cabang No. Surat)</option>
+                                        </select>
+                                    </div>
+
+                                    {detailData.kondisi_surat === 'Rusak' && (
+                                        <div>
+                                            <label className="block font-semibold mb-1">Alasan Kerusakan & Catatan Audit</label>
+                                            <input 
+                                                type="text" 
+                                                placeholder="Tuliskan alasan kerusakan..." 
+                                                value={detailData.alasan_ubah}
+                                                onChange={e => setDetailData('alasan_ubah', e.target.value)}
+                                                className="w-full border rounded-lg p-2 text-xs"
+                                                required 
+                                            />
+                                        </div>
+                                    )}
+
+                                    <div className="flex justify-end space-x-2 pt-2">
+                                        <button type="submit" className="bg-amber-600 text-white font-bold px-4 py-2 rounded-lg hover:bg-amber-700">Simpan Perubahan (Change)</button>
+                                    </div>
+                                </form>
+                            )}
+
+                            {/* Tombol Bawah di Modal */}
+                            <div className="flex justify-between items-center pt-3 border-t">
+                                {!isEditing ? (
+                                    <>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setIsEditing(true)} 
+                                            className="bg-amber-500 hover:bg-amber-600 text-white font-bold px-4 py-2 rounded-lg text-xs"
+                                        >
+                                            ⚙️ Change (Ubah Data)
+                                        </button>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setShowDetailModal(false)} 
+                                            className="bg-blue-900 hover:bg-blue-800 text-white font-bold px-4 py-2 rounded-lg text-xs"
+                                        >
+                                            Tutup
+                                        </button>
+                                    </>
+                                ) : (
                                     <button 
-                                        onClick={() => setIsModalOpen(true)} 
-                                        className="bg-gray-900 hover:bg-black text-white font-bold py-2 px-4 rounded text-xs shadow-md"
+                                        type="button" 
+                                        onClick={() => setIsEditing(false)} 
+                                        className="bg-gray-300 text-gray-700 font-bold px-4 py-2 rounded-lg text-xs"
                                     >
-                                        + Input Polis (Manual)
+                                        Batal Edit
                                     </button>
                                 )}
                             </div>
                         </div>
-
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm text-left text-gray-500 border border-gray-200">
-                                <thead className="text-xs text-gray-700 uppercase bg-gray-100">
-                                    <tr>
-                                        <th className="px-4 py-3 border-b">Tgl Input</th>
-                                        <th className="px-4 py-3 border-b">Tertanggung</th>
-                                        <th className="px-4 py-3 border-b">No. Surat & Polis</th>
-                                        <th className="px-4 py-3 border-b">Periode</th>
-                                        <th className="px-4 py-3 border-b">Rincian TSI</th>
-                                        <th className="px-4 py-3 border-b">Premi</th>
-                                        <th className="px-4 py-3 border-b">Sumber</th>
-                                        <th className="px-4 py-3 border-b">Status Workflow</th>
-                                        <th className="px-4 py-3 border-b text-center">Aksi / Kontrol</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {akdData && akdData.length > 0 ? (
-                                        akdData.map((item) => (
-                                            <tr key={item.id} className="bg-white border-b hover:bg-gray-50">
-                                                <td className="px-4 py-4">{item.tgl_input}</td>
-                                                <td className="px-4 py-4 font-medium text-gray-900">{item.nama_tertanggung}</td>
-                                                <td className="px-4 py-4">
-                                                    <div className="text-xs text-gray-500">{item.no_surat}</div>
-                                                    <div className="font-semibold">{item.no_polis}</div>
-                                                </td>
-                                                <td className="px-4 py-4">
-                                                    {item.periode_awal} s/d <br/>{item.periode_akhir}
-                                                </td>
-                                                <td className="px-4 py-4 text-xs">
-                                                    <div>A/B: {Number(item.tsi_ab).toLocaleString('id-ID')}</div>
-                                                    <div>C: {Number(item.tsi_c).toLocaleString('id-ID')}</div>
-                                                    <div>D: {Number(item.tsi_d).toLocaleString('id-ID')}</div>
-                                                    <div>E: {Number(item.tsi_e).toLocaleString('id-ID')}</div>
-                                                </td>
-                                                <td className="px-4 py-4 font-semibold text-gray-800">
-                                                    Rp {Number(item.premi).toLocaleString('id-ID')}
-                                                </td>
-                                                <td className="px-4 py-4">{item.sumber_bisnis}</td>
-                                                
-                                                <td className="px-3 py-4 text-xs">
-                                                    <div className="font-semibold text-purple-600">Approval: {item.status_approval}</div>
-                                                    {item.paraf_timestamp && <div className="text-gray-400">Paraf oleh: {item.paraf_oleh}</div>}
-                                                    
-                                                    <div className="font-semibold text-orange-600 mt-1">Serah Terima: {item.status_serah_terima}</div>
-                                                    
-                                                    {item.bukti_terima ? (
-                                                        <div className="mt-1 bg-emerald-50 p-1.5 rounded border border-emerald-200">
-                                                            <span className="text-emerald-700 font-bold block">✓ Diterima Tertanggung</span>
-                                                            <span className="text-gray-500 text-[10px]">Tgl: {item.tanggal_terima}</span>
-                                                            <div className="mt-1">
-                                                                <a 
-                                                                    href={`/storage/${item.bukti_terima}`} 
-                                                                    target="_blank" 
-                                                                    rel="noopener noreferrer" 
-                                                                    className="text-blue-600 underline font-semibold hover:text-blue-800 text-[10px]"
-                                                                >
-                                                                    🔍 Lihat Delivery Receipt
-                                                                </a>
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="text-gray-400 italic text-[10px] mt-1">Belum ada Delivery Receipt</div>
-                                                    )}
-                                                </td>
-
-                                                <td className="px-3 py-4 text-center align-middle">
-                                                    {role === 'staff' && (
-                                                        <div className="space-y-1.5">
-                                                            {item.status_approval === 'Pending Review Staff' && (
-                                                                <button 
-                                                                    onClick={() => router.post(route('akd.mintaApproval', item.id))} 
-                                                                    className="bg-purple-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-purple-700 shadow transition w-full"
-                                                                >
-                                                                    📤 Minta Approval
-                                                                </button>
-                                                            )}
-
-                                                            {item.status_approval === 'Diparaf Kepala Staff' && item.status_serah_terima === 'Belum Diserahkan' && (
-                                                                <button 
-                                                                    onClick={() => router.post(route('akd.kirimKeAgen', item.id))} 
-                                                                    className="bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-blue-700 shadow transition w-full"
-                                                                >
-                                                                    🚀 Kirim ke Agen
-                                                                </button>
-                                                            )}
-
-                                                            {item.status_approval !== 'Pending Review Staff' && item.status_approval !== 'Diparaf Kepala Staff' && (
-                                                                <span className="text-xs text-gray-400 italic">Menunggu Proses Pimpinan</span>
-                                                            )}
-                                                        </div>
-                                                    )}
-
-                                                    {role === 'kepala_staff' && (item.status_approval.includes('Pending') || item.status_approval === 'Pending Kepala Staff') && (
-                                                        <button 
-                                                            onClick={() => router.post(route('akd.paraf', item.id))} 
-                                                            className="bg-amber-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-amber-700 shadow transition w-full"
-                                                        >
-                                                            ✍️ Berikan Paraf Digital
-                                                        </button>
-                                                    )}
-
-                                                    {role === 'kepala_staff' && !item.status_approval.includes('Pending') && item.status_approval !== 'Pending Kepala Staff' && (
-                                                        <span className="text-xs text-emerald-600 font-semibold">Sudah Diparaf</span>
-                                                    )}
-
-                                                    {role === 'agen' && item.status_approval === 'Diparaf Kepala Staff' && item.status_serah_terima !== 'Diterima Tertanggung' && (
-                                                        <button 
-                                                            onClick={() => {
-                                                                setSelectedAkdId(item.id);
-                                                                setIsTerimaModalOpen(true);
-                                                            }} 
-                                                            className="bg-emerald-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-emerald-700 shadow transition w-full"
-                                                        >
-                                                            📥 Konfirmasi Diterima
-                                                        </button>
-                                                    )}
-                                                    
-                                                    {role === 'agen' && item.status_approval === 'Pending Kepala Staff' && (
-                                                        <span className="text-xs text-amber-500 italic">Menunggu Paraf Pimpinan</span>
-                                                    )}
-                                                    
-                                                    {role === 'agen' && item.status_serah_terima === 'Diterima Tertanggung' && (
-                                                        <span className="text-xs text-gray-500 font-medium">Selesai Diserahkan</span>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))
-                                    ) : (
-                                        <tr><td colSpan="9" className="px-4 py-8 text-center text-gray-500">Belum ada data polis yang diinput.</td></tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
                     </div>
                 </div>
-
-                {isModalOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 print:hidden">
-                        <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6">
-                            <div className="flex justify-between items-center mb-4 border-b pb-2">
-                                <h3 className="text-lg font-bold text-gray-800">Form Input Manual AKD (Staff Operasional)</h3>
-                                <button onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-red-500 font-bold text-xl">&times;</button>
-                            </div>
-                            
-                            <form onSubmit={submitForm}>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-3">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700">Tanggal Input</label>
-                                            <input type="date" required value={data.tgl_input} onChange={e => setData('tgl_input', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700">Nama Tertanggung</label>
-                                            <input type="text" required value={data.nama_tertanggung} onChange={e => setData('nama_tertanggung', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" placeholder="Contoh: PT. Gending Cempaka" />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700">No. Surat (NS)</label>
-                                            <input type="text" value={data.no_surat} onChange={e => setData('no_surat', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700">No. Polis</label>
-                                            <input type="text" value={data.no_polis} onChange={e => setData('no_polis', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" />
-                                        </div>
-                                        
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700">Upload Scan Polis (PDF/Foto)</label>
-                                            <input type="file" required onChange={e => setData('scan_polis', e.target.files[0])} className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
-                                            {errors.scan_polis && <div className="text-red-500 text-xs mt-1">{errors.scan_polis}</div>}
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700">Periode Awal</label>
-                                                <input type="date" required value={data.periode_awal} onChange={e => setData('periode_awal', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700">Periode Akhir</label>
-                                                <input type="date" required value={data.periode_akhir} onChange={e => setData('periode_akhir', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-3 bg-gray-50 p-3 rounded-lg border">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700">TSI A/B (Angka Saja)</label>
-                                            <input type="number" value={data.tsi_ab} onChange={e => setData('tsi_ab', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" placeholder="Contoh: 50000000" />
-                                        </div>
-                                        <div className="grid grid-cols-3 gap-2">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700">TSI C</label>
-                                                <input type="number" value={data.tsi_c} onChange={e => setData('tsi_c', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700">TSI D</label>
-                                                <input type="number" value={data.tsi_d} onChange={e => setData('tsi_d', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700">TSI E</label>
-                                                <input type="number" value={data.tsi_e} onChange={e => setData('tsi_e', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" />
-                                            </div>
-                                        </div>
-                                        <hr className="my-2" />
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700">Total Premi</label>
-                                            <input type="number" value={data.premi} onChange={e => setData('premi', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700">Sumber / Agen</label>
-                                            <input type="text" value={data.sumber_bisnis} onChange={e => setData('sumber_bisnis', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" placeholder="Contoh: Direct / Nama Agen" />
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div className="mt-6 flex justify-end space-x-3 border-t pt-4">
-                                    <button type="button" onClick={() => setIsModalOpen(false)} className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded shadow-sm hover:bg-gray-50 text-sm">Batal</button>
-                                    <button type="submit" disabled={processing} className="bg-blue-600 text-white px-4 py-2 rounded shadow-sm hover:bg-blue-700 disabled:opacity-50 text-sm">
-                                        {processing ? 'Menyimpan...' : 'Simpan Data Polis'}
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                )}
-
-                {isTerimaModalOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-                        <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-                            <h3 className="text-lg font-bold text-gray-800 mb-2">Upload Delivery Receipt (Tanda Terima)</h3>
-                            <p className="text-xs text-gray-500 mb-4">Unggah lembar Berita Acara / Tanda Terima fisik yang sah dan bertanda tangan untuk mengonfirmasi penyerahan polis.</p>
-                            
-                            <form onSubmit={submitKonfirmasiTerima}>
-                                <div className="mb-4">
-                                    <input 
-                                        type="file" 
-                                        required 
-                                        onChange={e => terimaForm.setData('bukti_terima', e.target.files[0])} 
-                                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100" 
-                                    />
-                                    {terimaForm.errors.bukti_terima && <div className="text-red-500 text-xs mt-1">{terimaForm.errors.bukti_terima}</div>}
-                                </div>
-
-                                <div className="flex justify-end space-x-2">
-                                    <button 
-                                        type="button" 
-                                        onClick={() => setIsTerimaModalOpen(false)} 
-                                        className="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-300"
-                                    >
-                                        Batal
-                                    </button>
-                                    <button 
-                                        type="submit" 
-                                        disabled={terimaForm.processing}
-                                        className="bg-emerald-600 text-white px-4 py-2 rounded text-sm hover:bg-emerald-700 font-bold disabled:opacity-50"
-                                    >
-                                        {terimaForm.processing ? 'Mengunggah...' : 'Konfirmasi & Unggah'}
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                )}
-
-            </div>
+            )}
         </AuthenticatedLayout>
     );
 }

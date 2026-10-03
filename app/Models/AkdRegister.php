@@ -9,6 +9,10 @@ class AkdRegister extends Model
 {
     use HasFactory;
 
-    // Mengizinkan semua kolom diisi data dari form, kecuali kolom ID
     protected $guarded = ['id'];
+
+    // Otomatisasi konversi array ke JSON
+    protected $casts = [
+        'nomor_surat_array' => 'array',
+    ];
 }

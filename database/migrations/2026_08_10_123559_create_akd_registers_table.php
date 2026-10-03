@@ -31,10 +31,28 @@ return new class extends Migration
             $table->date('batas_pembayaran')->nullable();
             $table->string('kontak')->nullable();
             
-            // Status Validasi Digital
+            // ==========================================
+            // PENAMBAHAN KOLOM UNTUK FITUR BARU E-REGISTER
+            // ==========================================
+            $table->json('nomor_surat_array')->nullable();
+            $table->string('scan_polis')->nullable();
+            $table->string('status_approval')->default('Pending Kepala Staff');
+            $table->string('status_serah_terima')->default('Belum Diserahkan');
+            $table->unsignedBigInteger('created_by')->nullable();
+            
+            // Log & Tanda Terima Workflow
+            $table->timestamp('paraf_timestamp')->nullable();
+            $table->string('paraf_oleh')->nullable();
+            $table->string('bukti_terima')->nullable();
+            $table->timestamp('tanggal_terima')->nullable();
+
+            // Status Validasi Digital (Bawaan Lama)
             $table->string('status_penerbitan')->default('Pending');
             $table->string('status_pengiriman')->default('Pending');
             
+            $table->string('kondisi_surat')->default('Normal'); // Pilihan: Normal, Rusak, Parsial
+            $table->text('keterangan_audit')->nullable();       // Catatan khusus jika ada salah cetak/rusak
+
             $table->timestamps();
         });
     }
@@ -44,4 +62,3 @@ return new class extends Migration
         Schema::dropIfExists('akd_registers');
     }
 };
-

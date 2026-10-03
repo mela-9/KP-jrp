@@ -1,403 +1,392 @@
-import * as XLSX from 'xlsx';
 import React, { useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, useForm, router, usePage } from '@inertiajs/react';
+import { Head, useForm, router } from '@inertiajs/react';
+import RegisterWorkflowActions from '@/Components/RegisterWorkflowActions';
 
-export default function SuretyBondIndex({ auth, sbData = [], stats = { total: 0, pending_paraf: 0, siap_serah: 0, selesai: 0 } }) {
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isTerimaModalOpen, setIsTerimaModalOpen] = useState(false);
-    const [selectedSbId, setSelectedSbId] = useState(null);
+export default function Index({ auth, sbData, autoNumbers, filters }) {
+    const [showModal, setShowModal] = useState(false);
+    const [showDetailModal, setShowDetailModal] = useState(false);
+    const [selectedItem, setSelectedItem] = useState(null);
+    const [isEditing, setIsEditing] = useState(false);
 
-    const role = auth.user?.role;
+    // State untuk Search dan Filter Bulan
+    const [search, setSearch] = useState(filters?.search || '');
+    const [selectedMonth, setSelectedMonth] = useState(filters?.bulan || '');
 
     const { data, setData, post, processing, reset } = useForm({
-        tgl_input: '',
-        cob_toc: '',
+        tgl_input: new Date().toISOString().split('T')[0],
         tertanggung: '',
-        no_polis: '',
-        periode_awal: '',
-        periode_akhir: '',
+        cob_toc: 'Jaminan Pelaksanaan (Performance Bond)',
+        no_surat: autoNumbers?.no_surat || '',
+        no_polis: autoNumbers?.no_polis || '',
+        jumlah_halaman: 1,
+        periode_awal: new Date().toISOString().split('T')[0],
+        periode_akhir: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
         tsi: '',
-        share: '100%',
         premi: '',
-        jatuh_tempo: '',
-        agen: '',
-        pic: '',
-        scan_polis: null
+        kondisi_surat: 'Normal',
     });
 
-    const handlePrint = () => window.print();
+    const { data: detailData, setData: setDetailData } = useForm({
+        kondisi_surat: 'Normal',
+        alasan_ubah: '',
+    });
 
-    const handleExport = () => {
-        if (!sbData || sbData.length === 0) {
-            alert("Belum ada data Surety Bond untuk diekspor!");
-            return;
-        }
-
-        const dataToExport = sbData.map((item, index) => ({
-            "No": index + 1,
-            "Tanggal Input": item.tgl_input,
-            "COB / TOC": item.cob_toc,
-            "Tertanggung & Alamat": item.tertanggung,
-            "No. Polis / Cert": item.no_polis,
-            "Periode Awal": item.periode_awal,
-            "Periode Akhir": item.periode_akhir,
-            "TSI (Rp)": Number(item.tsi),
-            "Share (%)": item.share,
-            "Premi (Rp)": Number(item.premi),
-            "Jatuh Tempo": item.jatuh_tempo,
-            "Agen / Broker": item.agen,
-            "PIC Branch": item.pic,
-            "Status Approval": item.status_approval,
-            "Status Serah Terima": item.status_serah_terima,
-        }));
-
-        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Buku Besar Surety Bond");
-        XLSX.writeFile(workbook, "E_Register_Surety_Bond_Export.xlsx");
+    // Handler untuk Live Search
+    const handleSearchChange = (e) => {
+        const querySearch = e.target.value;
+        setSearch(querySearch);
+        router.get(
+            window.location.pathname, 
+            { search: querySearch, bulan: selectedMonth }, 
+            { preserveState: true, replace: true }
+        );
     };
 
-    const submitForm = (e) => {
+    // Handler untuk Filter Bulan
+    const handleMonthChange = (e) => {
+        const queryBulan = e.target.value;
+        setSelectedMonth(queryBulan);
+        router.get(
+            window.location.pathname,
+            { search: search, bulan: queryBulan },
+            { preserveState: true, replace: true }
+        );
+    };
+
+    const submit = (e) => {
         e.preventDefault();
         post(route('surety.store'), {
-            forceFormData: true,
             onSuccess: () => {
-                setIsModalOpen(false);
+                setShowModal(false);
                 reset();
             },
         });
     };
 
-    const submitKonfirmasiTerima = (e) => {
+    const openDetailModal = (item) => {
+        setSelectedItem(item);
+        setIsEditing(false);
+        setDetailData({
+            kondisi_surat: item.kondisi_surat || 'Normal',
+            alasan_ubah: item.keterangan_audit || '',
+        });
+        setShowDetailModal(true);
+    };
+
+    const handleChangeSubmit = (e) => {
         e.preventDefault();
-        
-        const fileInput = document.getElementById('file_upload_surety_terima');
-        if (!fileInput || !fileInput.files[0]) {
-            alert('Pilih file bukti terima terlebih dahulu!');
-            return;
-        }
-
-        const formData = new FormData();
-        formData.append('bukti_terima', fileInput.files[0]);
-
-        router.post(route('surety.terima', selectedSbId), formData, {
-            forceFormData: true,
-            preserveScroll: true,
+        router.put(route('surety.update-surat', selectedItem.id), {
+            kondisi_surat: detailData.kondisi_surat,
+            alasan_ubah: detailData.alasan_ubah,
+        }, {
             onSuccess: () => {
-                setIsTerimaModalOpen(false);
-                setSelectedSbId(null);
-            },
-            onError: () => {
-                alert('Gagal mengunggah file. Pastikan format PDF/Gambar maksimal 2MB.');
+                setShowDetailModal(false);
+                setIsEditing(false);
             }
         });
     };
 
-    const getRoleBadge = () => {
-        if (role === 'staff') return <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded">Mode: Staff (Operasional)</span>;
-        if (role === 'kepala_staff') return <span className="bg-amber-100 text-amber-800 text-xs font-semibold px-2.5 py-0.5 rounded">Mode: Kepala Staff (Otorisasi)</span>;
-        if (role === 'agen') return <span className="bg-emerald-100 text-emerald-800 text-xs font-semibold px-2.5 py-0.5 rounded">Mode: Agen (Lapangan)</span>;
-        return null;
-    };
-
     return (
-        <AuthenticatedLayout
-            user={auth.user}
-            header={
-                <div className="flex justify-between items-center">
-                    <h2 className="font-semibold text-xl text-gray-800 leading-tight">E-Register Polis: Surety Bond (Jaminan Penawaran/Pelaksanaan/Uang Muka)</h2>
-                    {getRoleBadge()}
-                </div>
-            }
-        >
-            <Head title="E-Register Surety Bond" />
+        <AuthenticatedLayout user={auth.user} header={<h2 className="font-semibold text-xl text-slate-800">Buku Besar: Surety Bond</h2>}>
+            <Head title="Buku Besar Surety Bond" />
 
-            <div className="py-12">
-                <div className="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
-
-                    {usePage().props.flash?.success && (
-                        <div className="bg-emerald-100 border border-emerald-400 text-emerald-700 px-4 py-3 rounded relative shadow-sm">
-                            <span className="block sm:inline font-medium text-sm">🔔 {usePage().props.flash.success}</span>
-                        </div>
-                    )}
-
-                    {/* WIDGET DASHBOARD STATISTIK */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 print:hidden">
-                        <div className="bg-white p-5 rounded-lg shadow-sm border-l-4 border-blue-500">
-                            <div className="text-sm font-medium text-gray-500">Total Buku Besar Surety Bond</div>
-                            <div className="text-2xl font-bold text-gray-800 mt-1">{stats.total} Polis</div>
-                            <div className="text-xs text-gray-400 mt-1">Seluruh data tercatat di sistem</div>
-                        </div>
-
-                        <div className={`bg-white p-5 rounded-lg shadow-sm border-l-4 ${role === 'kepala_staff' ? 'border-amber-500 bg-amber-50/30' : 'border-purple-500'}`}>
-                            <div className="text-sm font-medium text-gray-500">Menunggu Paraf (Pending)</div>
-                            <div className="text-2xl font-bold text-amber-600 mt-1">{stats.pending_paraf} Polis</div>
-                            <div className="text-xs text-gray-400 mt-1">
-                                {role === 'kepala_staff' ? '⚠️ Butuh tindakan paraf digital segera!' : 'Belum disetujui Kepala Staff'}
-                            </div>
-                        </div>
-
-                        <div className={`bg-white p-5 rounded-lg shadow-sm border-l-4 ${role === 'agen' ? 'border-emerald-500 bg-emerald-50/30' : 'border-emerald-500'}`}>
-                            <div className="text-sm font-medium text-gray-500">Siap Diterima / Proses</div>
-                            <div className="text-2xl font-bold text-emerald-600 mt-1">{stats.siap_serah} Polis</div>
-                            <div className="text-xs text-gray-400 mt-1">
-                                {role === 'agen' ? '📋 Polis siap diambil & upload tanda terima' : 'Dalam proses penyerahan lapangan'}
-                            </div>
-                        </div>
+            <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                
+                {/* HEADER: Keterangan, Search, Filter, dan Tombol */}
+                <div className="flex flex-col lg:flex-row justify-between items-center bg-white p-4 rounded-xl shadow-xs border border-slate-200 gap-4 mb-4">
+                    {/* KIRI: Judul & Deskripsi */}
+                    <div className="w-full lg:w-auto">
+                        <h3 className="font-bold text-slate-800 text-sm">Register Fisik Digital - Surety Bond</h3>
+                        <p className="text-xs text-slate-500">Pencatatan berurutan sesuai alokasi gudang surat resmi PT Asuransi Jasaraharja Putera.</p>
                     </div>
 
-                    <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
+                    {/* KANAN: Search, Filter, dan Button */}
+                    <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
+                        
+                        {/* Search Input */}
+                        <input
+                            type="text"
+                            placeholder="Cari No. Surat / Polis / Tertanggung..."
+                            value={search}
+                            onChange={handleSearchChange}
+                            className="w-full sm:w-64 px-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                        />
 
-                        {/* Header & Tombol Aksi */}
-                        <div className="flex justify-between items-center mb-4 print:hidden">
-                            <div>
-                                <h3 className="text-lg font-bold text-gray-700">Buku Besar Digital Surety Bond</h3>
+                        {/* Wrapper Filter Bulan */}
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                            <span className="text-sm text-slate-600 font-medium whitespace-nowrap hidden md:block">
+                                Filter Bulan:
+                            </span>
+                            <select
+                                value={selectedMonth}
+                                onChange={handleMonthChange}
+                                className="w-full sm:w-auto border border-slate-200 rounded-lg text-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
+                            >
+                                <option value="">Semua Bulan</option>
+                                <option value="01">Januari</option>
+                                <option value="02">Februari</option>
+                                <option value="03">Maret</option>
+                                <option value="04">April</option>
+                                <option value="05">Mei</option>
+                                <option value="06">Juni</option>
+                                <option value="07">Juli</option>
+                                <option value="08">Agustus</option>
+                                <option value="09">September</option>
+                                <option value="10">Oktober</option>
+                                <option value="11">November</option>
+                                <option value="12">Desember</option>
+                            </select>
+                        </div>
+
+                        {/* Tombol Input Surety Bond Baru */}
+                        <button 
+                            onClick={() => setShowModal(true)}
+                            className="w-full sm:w-auto bg-blue-900 hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-xs transition whitespace-nowrap"
+                        >
+                            + Input Surety Bond Baru
+                        </button>
+                    </div>
+                </div>
+
+                {/* TABEL DATA */}
+                <div className="bg-white rounded-xl shadow-xs border border-slate-300 overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-[11px] border-collapse min-w-[1450px]">
+                            <thead>
+                                <tr className="bg-blue-950 text-white uppercase tracking-wider text-[10px] text-center border-b border-blue-900">
+                                    <th className="p-2.5 border-r border-blue-900 w-12">No.</th>
+                                    <th className="p-2.5 border-r border-blue-900 w-40">Jenis Jaminan (COB)</th>
+                                    <th className="p-2.5 border-r border-blue-900 w-48">Tertanggung & Alamat</th>
+                                    <th className="p-2.5 border-r border-blue-900 w-44">No. CI / No. Polis</th>
+                                    <th className="p-2.5 border-r border-blue-900 w-40">Periode</th>
+                                    <th className="p-2.5 border-r border-blue-900 w-36">Nilai Jaminan (TSI)</th>
+                                    <th className="p-2.5 border-r border-blue-900 w-20">Share</th>
+                                    <th className="p-2.5 border-r border-blue-900 w-32">Premi (IDR)</th>
+                                    <th className="p-2.5 border-r border-blue-900 w-28">Agen / Broker</th>
+                                    <th className="p-2.5 border-r border-blue-900 w-32">PIC Branch Office</th>
+                                    <th className="p-2.5 border-r border-blue-900 w-36">Telp / HP / Email</th>
+                                    <th className="p-2.5 border-r border-blue-900 w-36">No. Surat & Kertas</th>
+                                    <th className="p-2.5">Status & Audit</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-300 text-slate-800">
+                                {sbData && sbData.length > 0 ? (
+                                    sbData.map((item, index) => (
+                                        <tr key={item.id} className="hover:bg-blue-50/50 transition">
+                                            <td className="p-2.5 border-r border-slate-200 text-center font-medium bg-slate-50">{index + 1}</td>
+                                            <td className="p-2.5 border-r border-slate-200 font-semibold text-blue-900">{item.cob_toc}</td>
+                                            <td className="p-2.5 border-r border-slate-200">
+                                                <div className="font-bold text-slate-900">{item.tertanggung}</div>
+                                                <div className="text-[10px] text-slate-500">Palembang, Sumsel</div>
+                                            </td>
+                                            <td className="p-2.5 border-r border-slate-200 font-mono">
+                                                <div className="text-blue-900 font-bold">{item.no_polis}</div>
+                                            </td>
+                                            <td className="p-2.5 border-r border-slate-200 text-slate-600">
+                                                {item.periode_awal} s.d <br />{item.periode_akhir}
+                                            </td>
+                                            <td className="p-2.5 border-r border-slate-200 font-mono font-bold text-right text-slate-900">
+                                                Rp {Number(item.tsi).toLocaleString('id-ID')}
+                                            </td>
+                                            <td className="p-2.5 border-r border-slate-200 text-center font-semibold">100%</td>
+                                            <td className="p-2.5 border-r border-slate-200 font-mono font-bold text-right text-slate-900">
+                                                Rp {Number(item.premi).toLocaleString('id-ID')}
+                                            </td>
+                                            <td className="p-2.5 border-r border-slate-200 text-center">Direct</td>
+                                            <td className="p-2.5 border-r border-slate-200 font-medium">Bp. Uli / Bp. Hadran</td>
+                                            <td className="p-2.5 border-r border-slate-200 text-slate-500 text-[10px]">adespamandiri@gmail.com</td>
+                                            
+                                            {/* TOMBOL RINCIAN */}
+                                            <td className="p-2.5 border-r border-slate-200 text-center">
+                                                <button 
+                                                    onClick={() => openDetailModal(item)}
+                                                    className="bg-blue-900 hover:bg-blue-800 text-white font-bold px-3 py-1 rounded text-[11px] transition shadow-xs"
+                                                >
+                                                    🔍 Rincian Surat
+                                                </button>
+                                            </td>
+
+                                           <td className="p-2.5 text-center font-mono text-[10px] bg-slate-50 space-y-1">
+    <div>
+        {item.kondisi_surat === 'Normal' && <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">Normal</span>}
+        {item.kondisi_surat === 'Rusak' && <span className="bg-red-100 text-red-800 px-2 py-0.5 rounded text-[10px] font-bold">Rusak</span>}
+        {item.kondisi_surat === 'Parsial' && <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">Parsial</span>}
+    </div>
+    
+    {/* Status Approval yang Dinamis */}
+    <RegisterWorkflowActions item={item} type="SURETY" />
+</td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan="13" className="p-6 text-center text-slate-400 italic">Belum ada data Surety Bond.</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            {/* MODAL INPUT SURETY BOND BARU */}
+            {showModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-center border-b pb-3">
+                            <h3 className="font-bold text-base text-blue-900">📝 Pendaftaran Surety Bond Baru</h3>
+                            <button onClick={() => setShowModal(false)} className="text-gray-400 font-bold text-xl">&times;</button>
+                        </div>
+                        <form onSubmit={submit} className="space-y-3 text-xs">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block font-semibold mb-1">Tanggal Input</label>
+                                    <input type="date" value={data.tgl_input} onChange={e => setData('tgl_input', e.target.value)} className="w-full border rounded-lg p-2 text-xs" required />
+                                </div>
+                                <div>
+                                    <label className="block font-semibold mb-1">Nama Tertanggung / Prinsipal</label>
+                                    <input type="text" value={data.tertanggung} onChange={e => setData('tertanggung', e.target.value)} className="w-full border rounded-lg p-2 text-xs" required />
+                                </div>
                             </div>
-                            <div className="space-x-2 flex">
-                                <button onClick={handleExport} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded text-xs">
-                                    Export Excel
-                                </button>
-                                <button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded text-xs">
-                                    Print / PDF
-                                </button>
-                                {role === 'staff' && (
-                                    <button onClick={() => setIsModalOpen(true)} className="bg-gray-800 hover:bg-gray-900 text-white font-bold py-2 px-4 rounded text-xs shadow-md">
-                                        + Input Polis Surety Bond
+
+                            <div>
+                                <label className="block font-semibold mb-1">Jenis Jaminan (COB)</label>
+                                <input type="text" value={data.cob_toc} onChange={e => setData('cob_toc', e.target.value)} className="w-full border rounded-lg p-2 text-xs" required />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block font-semibold mb-1">Nomor Polis</label>
+                                    <input type="text" value={data.no_polis} onChange={e => setData('no_polis', e.target.value)} className="w-full border rounded-lg p-2 text-xs font-mono bg-slate-50" required />
+                                </div>
+                                <div>
+                                    <label className="block font-semibold mb-1">Nomor Surat (Gudang)</label>
+                                    <input type="text" value={data.no_surat} onChange={e => setData('no_surat', e.target.value)} className="w-full border rounded-lg p-2 text-xs font-mono bg-slate-50" required />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block font-semibold mb-1">Jumlah Halaman Surat Fisik</label>
+                                <input type="number" min="1" max="5" value={data.jumlah_halaman} onChange={e => setData('jumlah_halaman', e.target.value)} className="w-full border rounded-lg p-2 text-xs" required />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block font-semibold mb-1">Nilai Jaminan (Rp)</label>
+                                    <input type="number" value={data.tsi} onChange={e => setData('tsi', e.target.value)} className="w-full border rounded-lg p-2 text-xs" required />
+                                </div>
+                                <div>
+                                    <label className="block font-semibold mb-1">Premi (Rp)</label>
+                                    <input type="number" value={data.premi} onChange={e => setData('premi', e.target.value)} className="w-full border rounded-lg p-2 text-xs" required />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block font-semibold mb-1">Kondisi Lembar Surat</label>
+                                <select value={data.kondisi_surat} onChange={e => setData('kondisi_surat', e.target.value)} className="w-full border rounded-lg p-2 text-xs bg-blue-50 font-bold">
+                                    <option value="Normal">Normal</option>
+                                    <option value="Rusak">Rusak (Void)</option>
+                                    <option value="Parsial">Parsial (Salah Cetak Jalur)</option>
+                                </select>
+                            </div>
+
+                            <div className="flex justify-end space-x-2 pt-2 border-t">
+                                <button type="button" onClick={() => setShowModal(false)} className="bg-gray-200 px-3 py-2 rounded font-bold">Batal</button>
+                                <button type="submit" disabled={processing} className="bg-blue-900 text-white px-3 py-2 rounded font-bold">Simpan & Potong Kuota</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL RINCIAN & AUDIT PERUBAHAN */}
+            {showDetailModal && selectedItem && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-center border-b pb-3">
+                            <h3 className="font-bold text-base text-blue-900">📋 Rincian & Audit Nomor Surat Surety Bond</h3>
+                            <button onClick={() => setShowDetailModal(false)} className="text-gray-400 font-bold text-xl">&times;</button>
+                        </div>
+
+                        <div className="space-y-3 text-xs">
+                            <div className="bg-slate-50 p-3 rounded-lg border space-y-1">
+                                <div><span className="font-semibold text-slate-500">No. Polis:</span> <span className="font-mono font-bold text-blue-900">{selectedItem.no_polis}</span></div>
+                                <div><span className="font-semibold text-slate-500">Tertanggung:</span> <span className="font-bold">{selectedItem.tertanggung}</span></div>
+                                <div><span className="font-semibold text-slate-500">Status Saat Ini:</span> <span className="font-bold uppercase text-amber-700">{selectedItem.kondisi_surat}</span></div>
+                                {selectedItem.keterangan_audit && <div><span className="font-semibold text-slate-500">Catatan Audit:</span> <span className="text-slate-700 italic">{selectedItem.keterangan_audit}</span></div>}
+                            </div>
+
+                            <div>
+                                <label className="block font-semibold text-slate-700 mb-1">Nomor Surat Utama / Array:</label>
+                                <input type="text" value={selectedItem.no_surat} disabled className="w-full border rounded-lg p-2 text-xs font-mono bg-slate-100" />
+                            </div>
+
+                            {isEditing && (
+                                <form onSubmit={handleChangeSubmit} className="space-y-3 border-t pt-3">
+                                    <div>
+                                        <label className="block font-semibold mb-1">Ubah Kondisi / Status</label>
+                                        <select 
+                                            value={detailData.kondisi_surat} 
+                                            onChange={e => setDetailData('kondisi_surat', e.target.value)} 
+                                            className="w-full border rounded-lg p-2 text-xs font-bold bg-amber-50"
+                                        >
+                                            <option value="Normal">Normal</option>
+                                            <option value="Rusak">Rusak (Void / Kertas Robek)</option>
+                                            <option value="Parsial">Parsial (Lintas Jalur)</option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="block font-semibold mb-1">Alasan Perubahan / Catatan Audit</label>
+                                        <input 
+                                            type="text" 
+                                            placeholder="Tuliskan alasan perubahan..." 
+                                            value={detailData.alasan_ubah}
+                                            onChange={e => setDetailData('alasan_ubah', e.target.value)}
+                                            className="w-full border rounded-lg p-2 text-xs"
+                                            required 
+                                        />
+                                    </div>
+
+                                    <div className="flex justify-end space-x-2 pt-2">
+                                        <button type="submit" className="bg-amber-600 text-white font-bold px-4 py-2 rounded-lg hover:bg-amber-700">Simpan Perubahan (Change)</button>
+                                    </div>
+                                </form>
+                            )}
+
+                            <div className="flex justify-between items-center pt-3 border-t">
+                                {!isEditing ? (
+                                    <>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setIsEditing(true)} 
+                                            className="bg-amber-500 hover:bg-amber-600 text-white font-bold px-4 py-2 rounded-lg text-xs"
+                                        >
+                                            ⚙️ Change (Ubah Data)
+                                        </button>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setShowDetailModal(false)} 
+                                            className="bg-blue-900 hover:bg-blue-800 text-white font-bold px-4 py-2 rounded-lg text-xs"
+                                        >
+                                            Tutup
+                                        </button>
+                                    </>
+                                ) : (
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setIsEditing(false)} 
+                                        className="bg-gray-300 text-gray-700 font-bold px-4 py-2 rounded-lg text-xs"
+                                    >
+                                        Batal Edit
                                     </button>
                                 )}
                             </div>
                         </div>
-
-                        {/* Tabel Data Surety Bond */}
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm text-left text-gray-500 border border-gray-200">
-                                <thead className="text-xs text-gray-700 uppercase bg-gray-100">
-                                    <tr>
-                                        <th className="px-3 py-3 border-b">Tgl Input</th>
-                                        <th className="px-3 py-3 border-b">COB / TOC</th>
-                                        <th className="px-3 py-3 border-b">Tertanggung & Alamat</th>
-                                        <th className="px-3 py-3 border-b">No. Polis</th>
-                                        <th className="px-3 py-3 border-b">Periode</th>
-                                        <th className="px-3 py-3 border-b">TSI & Share</th>
-                                        <th className="px-3 py-3 border-b">Premi</th>
-                                        <th className="px-3 py-3 border-b">Jatuh Tempo & Agen</th>
-                                        <th className="px-3 py-3 border-b">Status Workflow</th>
-                                        <th className="px-3 py-3 border-b text-center">Aksi / Kontrol</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {sbData && sbData.length > 0 ? (
-                                        sbData.map((item) => (
-                                            <tr key={item.id} className="bg-white border-b hover:bg-gray-50">
-                                                <td className="px-3 py-4">{item.tgl_input}</td>
-                                                <td className="px-3 py-4 font-semibold text-blue-600">{item.cob_toc}</td>
-                                                <td className="px-3 py-4 font-medium text-gray-900 max-w-xs">{item.tertanggung}</td>
-                                                <td className="px-3 py-4 text-xs font-semibold">{item.no_polis}</td>
-                                                <td className="px-3 py-4 text-xs">{item.periode_awal} s/d <br/>{item.periode_akhir}</td>
-                                                <td className="px-3 py-4 text-xs">
-                                                    <div className="font-bold">Rp {Number(item.tsi).toLocaleString('id-ID')}</div>
-                                                    <div className="text-gray-400">Share: {item.share}</div>
-                                                </td>
-                                                <td className="px-3 py-4 font-semibold text-gray-800">Rp {Number(item.premi).toLocaleString('id-ID')}</td>
-                                                <td className="px-3 py-4 text-xs">
-                                                    <div>Tempo: {item.jatuh_tempo}</div>
-                                                    <div className="text-blue-600">{item.agen} ({item.pic})</div>
-                                                </td>
-                                                
-                                                {/* Kolom Workflow Status */}
-                                                <td className="px-3 py-4 text-xs">
-                                                    <div className="font-semibold text-purple-600">Approval: {item.status_approval || 'Pending Kepala Staff'}</div>
-                                                    {item.paraf_timestamp && <div className="text-gray-400">Paraf: {item.paraf_oleh}</div>}
-                                                    
-                                                    <div className="font-semibold text-orange-600 mt-1">Serah Terima: {item.status_serah_terima || 'Belum Diserahkan'}</div>
-                                                    
-                                                    {item.bukti_terima ? (
-                                                        <div className="mt-1 bg-emerald-50 p-1.5 rounded border border-emerald-200">
-                                                            <span className="text-emerald-700 font-bold block">✓ Diterima Tertanggung</span>
-                                                            <span className="text-gray-500 text-[10px]">Tgl: {item.tanggal_terima}</span>
-                                                            <div className="mt-1">
-                                                                <a 
-                                                                    href={`/storage/${item.bukti_terima}`} 
-                                                                    target="_blank" 
-                                                                    rel="noopener noreferrer" 
-                                                                    className="text-blue-600 underline font-semibold hover:text-blue-800 text-[10px]"
-                                                                >
-                                                                    🔍 Lihat Delivery Receipt
-                                                                </a>
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="text-gray-400 italic text-[10px] mt-1">Belum ada Delivery Receipt</div>
-                                                    )}
-                                                </td>
-
-                                                {/* Kolom Aksi Berdasarkan Role */}
-                                                <td className="px-3 py-4 text-center align-middle">
-                                                    {role === 'staff' && (
-                                                        <div className="space-y-1.5">
-                                                            {(!item.status_approval || item.status_approval.includes('Pending')) && (
-                                                                <button onClick={() => router.post(route('surety.mintaApproval', item.id))} className="bg-purple-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-purple-700 w-full">
-                                                                    📤 Minta Approval
-                                                                </button>
-                                                            )}
-                                                            {item.status_approval === 'Diparaf Kepala Staff' && item.status_serah_terima === 'Belum Diserahkan' && (
-                                                                <button onClick={() => router.post(route('surety.kirimKeAgen', item.id))} className="bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-blue-700 w-full">
-                                                                    🚀 Kirim ke Agen
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    )}
-
-                                                    {role === 'kepala_staff' && (!item.status_approval || item.status_approval.includes('Pending')) && (
-                                                        <button onClick={() => router.post(route('surety.paraf', item.id))} className="bg-amber-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-amber-700 w-full">
-                                                            ✍️ Berikan Paraf
-                                                        </button>
-                                                    )}
-
-                                                    {role === 'agen' && item.status_approval === 'Diparaf Kepala Staff' && item.status_serah_terima !== 'Diterima Tertanggung' && (
-                                                        <button onClick={() => { setSelectedSbId(item.id); setIsTerimaModalOpen(true); }} className="bg-emerald-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-emerald-700 w-full">
-                                                            📥 Konfirmasi Diterima
-                                                        </button>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))
-                                    ) : (
-                                        <tr><td colSpan="10" className="px-4 py-8 text-center text-gray-500">Belum ada data polis Surety Bond yang diinput.</td></tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-
                     </div>
                 </div>
-
-                {/* MODAL FORM INPUT SURETY BOND */}
-                {isModalOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 print:hidden">
-                        <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6">
-                            <div className="flex justify-between items-center mb-4 border-b pb-2">
-                                <h3 className="text-lg font-bold text-gray-800">Form Input Manual Surety Bond</h3>
-                                <button onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-red-500 font-bold text-xl">&times;</button>
-                            </div>
-                            
-                            <form onSubmit={submitForm}>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-3">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700">Tanggal Input</label>
-                                            <input type="date" required value={data.tgl_input} onChange={e => setData('tgl_input', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700">COB / TOC (Jenis Jaminan)</label>
-                                            <input type="text" required value={data.cob_toc} onChange={e => setData('cob_toc', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" placeholder="Contoh: Jaminan Pelaksanaan" />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700">Nama Tertanggung & Alamat</label>
-                                            <textarea required rows="2" value={data.tertanggung} onChange={e => setData('tertanggung', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" placeholder="Contoh: PT. Putra Prabu Mandiri..." />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700">No. Polis / Cert No.</label>
-                                            <input type="text" required value={data.no_polis} onChange={e => setData('no_polis', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" placeholder="110001112042600017" />
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700">Periode Awal</label>
-                                                <input type="date" required value={data.periode_awal} onChange={e => setData('periode_awal', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700">Periode Akhir</label>
-                                                <input type="date" required value={data.periode_akhir} onChange={e => setData('periode_akhir', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" />
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700">Upload Scan Polis (PDF/Foto)</label>
-                                            <input type="file" onChange={e => setData('scan_polis', e.target.files[0])} className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-3 bg-gray-50 p-3 rounded-lg border">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700">Total TSI / Nilai Proyek (Angka Saja)</label>
-                                            <input type="number" value={data.tsi} onChange={e => setData('tsi', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" placeholder="1560385650" />
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700">Share (%)</label>
-                                                <input type="text" value={data.share} onChange={e => setData('share', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" placeholder="100%" />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700">Jumlah Premi (Rp)</label>
-                                                <input type="number" value={data.premi} onChange={e => setData('premi', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" placeholder="7957664" />
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700">Tgl Jatuh Tempo Pembayaran</label>
-                                            <input type="date" value={data.jatuh_tempo} onChange={e => setData('jatuh_tempo', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" />
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700">Agen / Direct</label>
-                                                <input type="text" value={data.agen} onChange={e => setData('agen', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" placeholder="Agen / Direct" />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700">PIC Branch</label>
-                                                <input type="text" value={data.pic} onChange={e => setData('pic', e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" placeholder="Bp. Satrio" />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div className="mt-6 flex justify-end space-x-3 border-t pt-4">
-                                    <button type="button" onClick={() => setIsModalOpen(false)} className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded shadow-sm hover:bg-gray-50">Batal</button>
-                                    <button type="submit" disabled={processing} className="bg-blue-600 text-white px-4 py-2 rounded shadow-sm hover:bg-blue-700 disabled:opacity-50">
-                                        {processing ? 'Menyimpan...' : 'Simpan Data Surety Bond'}
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                )}
-
-                {/* MODAL UPLOAD DELIVERY RECEIPT SURETY BOND (KHUSUS AGEN) */}
-                {isTerimaModalOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-                        <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-                            <h3 className="text-lg font-bold text-gray-800 mb-2">Upload Delivery Receipt (Surety Bond)</h3>
-                            <p className="text-xs text-gray-500 mb-4">Unggah lembar Berita Acara / Tanda Terima fisik untuk mengonfirmasi penyerahan polis Surety Bond.</p>
-                            
-                            <form onSubmit={submitKonfirmasiTerima}>
-                                <div className="mb-4">
-                                    <input 
-                                        type="file" 
-                                        id="file_upload_surety_terima"
-                                        required 
-                                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100" 
-                                    />
-                                </div>
-
-                                <div className="flex justify-end space-x-2">
-                                    <button 
-                                        type="button" 
-                                        onClick={() => setIsTerimaModalOpen(false)} 
-                                        className="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-300"
-                                    >
-                                        Batal
-                                    </button>
-                                    <button 
-                                        type="submit" 
-                                        className="bg-emerald-600 text-white px-4 py-2 rounded text-sm font-bold"
-                                    >
-                                        Konfirmasi & Unggah
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                )}
-
-            </div>
+            )}
         </AuthenticatedLayout>
     );
 }

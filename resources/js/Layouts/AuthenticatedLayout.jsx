@@ -1,187 +1,127 @@
-import ApplicationLogo from '@/Components/ApplicationLogo';
-import Dropdown from '@/Components/Dropdown';
-import NavLink from '@/Components/NavLink';
-import ResponsiveNavLink from '@/Components/ResponsiveNavLink';
+import React, { useState } from 'react';
 import { Link, usePage } from '@inertiajs/react';
-import { useState } from 'react';
+import NotificationBell from '@/Components/NotificationBell';
 
-export default function AuthenticatedLayout({ header, children }) {
-    const user = usePage().props.auth.user;
+export default function AuthenticatedLayout({ user, header, children }) {
+    const { url } = usePage();
+    const [sidebarOpen, setSidebarOpen] = useState(true);
 
-    const [showingNavigationDropdown, setShowingNavigationDropdown] =
-        useState(false);
+    const isKepalaStaff = user?.role === 'kepala_staff' || user?.email === 'kepstaff123@gmail.com';
 
     return (
-        <div className="min-h-screen bg-gray-100">
-            <nav className="border-b border-gray-100 bg-white">
-                <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                    <div className="flex h-16 justify-between">
-                        <div className="flex">
-                            <div className="flex shrink-0 items-center">
-                                <Link href="/">
-                                    <ApplicationLogo className="block h-9 w-auto fill-current text-gray-800" />
-                                </Link>
+        <div className="min-h-screen bg-slate-100 flex font-sans">
+            
+            {/* SIDEBAR NAVBAR (KIRI) */}
+            <aside className={`${sidebarOpen ? 'w-64' : 'w-20'} bg-blue-950 text-slate-300 hidden md:flex flex-col justify-between shadow-xl transition-all duration-300 relative`}>
+                <div>
+                    <div className="h-16 flex items-center px-4 bg-blue-900 border-b border-blue-900/50 justify-between">
+                        <div className="flex items-center space-x-2 overflow-hidden">
+                            <div className="bg-amber-400 text-blue-950 font-black px-2 py-1 rounded text-sm tracking-wider shrink-0">
+                                JRP
                             </div>
-
-                            <div className="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
-                                <NavLink
-                                    href={route('dashboard')}
-                                    active={route().current('dashboard')}
-                                >
-                                    Dashboard
-                                </NavLink>
-                            </div>
+                            {sidebarOpen && (
+                                <div className="truncate">
+                                    <span className="font-bold text-white text-xs block">E-REGISTER</span>
+                                    <span className="text-[10px] text-slate-400 block">Jasaraharja Putera</span>
+                                </div>
+                            )}
                         </div>
-
-                        <div className="hidden sm:ms-6 sm:flex sm:items-center">
-                            <div className="relative ms-3">
-                                <Dropdown>
-                                    <Dropdown.Trigger>
-                                        <span className="inline-flex rounded-md">
-                                            <button
-                                                type="button"
-                                                className="inline-flex items-center rounded-md border border-transparent bg-white px-3 py-2 text-sm font-medium leading-4 text-gray-500 transition duration-150 ease-in-out hover:text-gray-700 focus:outline-none"
-                                            >
-                                                {user.name}
-
-                                                <svg
-                                                    className="-me-0.5 ms-2 h-4 w-4"
-                                                    xmlns="http://www.w3.org/2000/svg"
-                                                    viewBox="0 0 20 20"
-                                                    fill="currentColor"
-                                                >
-                                                    <path
-                                                        fillRule="evenodd"
-                                                        d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                                                        clipRule="evenodd"
-                                                    />
-                                                </svg>
-                                            </button>
-                                        </span>
-                                    </Dropdown.Trigger>
-
-                                    <Dropdown.Content>
-                                        <Dropdown.Link
-                                            href={route('profile.edit')}
-                                        >
-                                            Profile
-                                        </Dropdown.Link>
-                                        <Dropdown.Link
-                                            href={route('logout')}
-                                            method="post"
-                                            as="button"
-                                        >
-                                            Log Out
-                                        </Dropdown.Link>
-                                    </Dropdown.Content>
-                                </Dropdown>
-                            </div>
-                        </div>
-
-                        <div className="-me-2 flex items-center sm:hidden">
-                            <button
-                                onClick={() =>
-                                    setShowingNavigationDropdown(
-                                        (previousState) => !previousState,
-                                    )
-                                }
-                                className="inline-flex items-center justify-center rounded-md p-2 text-gray-400 transition duration-150 ease-in-out hover:bg-gray-100 hover:text-gray-500 focus:bg-gray-100 focus:text-gray-500 focus:outline-none"
-                            >
-                                <svg
-                                    className="h-6 w-6"
-                                    stroke="currentColor"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        className={
-                                            !showingNavigationDropdown
-                                                ? 'inline-flex'
-                                                : 'hidden'
-                                        }
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth="2"
-                                        d="M4 6h16M4 12h16M4 18h16"
-                                    />
-                                    <path
-                                        className={
-                                            showingNavigationDropdown
-                                                ? 'inline-flex'
-                                                : 'hidden'
-                                        }
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth="2"
-                                        d="M6 18L18 6M6 6l12 12"
-                                    />
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <div
-                    className={
-                        (showingNavigationDropdown ? 'block' : 'hidden') +
-                        ' sm:hidden'
-                    }
-                >
-                    <div className="space-y-1 pb-3 pt-2">
-                        <ResponsiveNavLink
-                            href={route('dashboard')}
-                            active={route().current('dashboard')}
+                        <button 
+                            onClick={() => setSidebarOpen(!sidebarOpen)}
+                            className="bg-blue-950 hover:bg-blue-800 text-slate-200 p-1.5 rounded-lg text-xs transition border border-blue-800"
                         >
-                            Dashboard
-                        </ResponsiveNavLink>
+                            {sidebarOpen ? '◀' : '▶'}
+                        </button>
                     </div>
 
-                    <div className="border-t border-gray-200 pb-1 pt-4">
-                        <div className="px-4">
-                            <div className="text-base font-medium text-gray-800">
-                                {user.name}
-                            </div>
-                            <div className="text-sm font-medium text-gray-500">
-                                {user.email}
-                            </div>
-                        </div>
+                    <nav className="p-3 space-y-1.5 text-xs font-semibold">
+                        {sidebarOpen && <div className="text-[10px] uppercase tracking-wider text-slate-400 px-3 pb-1">Menu Utama</div>}
+                        
+                        <Link href={route('dashboard')} className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg transition ${url.startsWith('/dashboard') ? 'bg-blue-900 text-white shadow-sm' : 'hover:bg-blue-900/50 text-slate-300'}`}>
+                            <span>📊</span>
+                            {sidebarOpen && <span>Dashboard Eksekutif</span>}
+                        </Link>
 
-                    <div className="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
-                        <NavLink href={route('dashboard')} active={route().current('dashboard')}>
-                            Dashboard
-                            </NavLink>
-    
-                            {/* Tambahkan Menu E-Register AKD di sini */}
-                        <NavLink href={route('akd.index')} active={route().current('akd.*')}>
-                             E-Register AKD
-                            </NavLink>
-                        </div>
+                        {isKepalaStaff ? (
+                            <>
+                                {sidebarOpen && <div className="pt-4 text-[10px] uppercase tracking-wider text-amber-400 px-3 pb-1">Validasi Korporat</div>}
+                                <Link href={route('kepala-staff.approvals')} className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg transition ${url.includes('/approvals') ? 'bg-blue-900 text-white shadow-sm' : 'hover:bg-blue-900/50 text-slate-300'}`}>
+                                    <span>📥</span>
+                                    {sidebarOpen && <span>Antrean Approval</span>}
+                                </Link>
+                                <Link href={route('kepala-staff.history')} className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg transition ${url.includes('/history') ? 'bg-blue-900 text-white shadow-sm' : 'hover:bg-blue-900/50 text-slate-300'}`}>
+                                    <span>📜</span>
+                                    {sidebarOpen && <span>History Persetujuan</span>}
+                                </Link>
+                            </>
+                        ) : (
+                            <>
+                                {sidebarOpen && <div className="pt-4 text-[10px] uppercase tracking-wider text-slate-400 px-3 pb-1">Manajemen Gudang</div>}
+                                <Link href={route('surat-blocks.index')} className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg transition ${url.includes('/surat-blocks') ? 'bg-blue-900 text-white shadow-sm' : 'hover:bg-blue-900/50 text-slate-300'}`}>
+                                    <span>📦</span>
+                                    {sidebarOpen && <span>Pendaftaran Blok Surat</span>}
+                                </Link>
 
-                        <div className="mt-3 space-y-1">
-                            <ResponsiveNavLink href={route('profile.edit')}>
-                                Profile
-                            </ResponsiveNavLink>
-                            <ResponsiveNavLink
-                                method="post"
-                                href={route('logout')}
-                                as="button"
-                            >
-                                Log Out
-                            </ResponsiveNavLink>
-                        </div>
-                    </div>
+                                {sidebarOpen && <div className="pt-4 text-[10px] uppercase tracking-wider text-slate-400 px-3 pb-1">6 Buku Besar E-Register</div>}
+                                <Link href={route('akd.index')} className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg transition ${url.includes('/akd') ? 'bg-blue-900 text-white shadow-sm' : 'hover:bg-blue-900/50 text-slate-300'}`}>
+                                    <span>📁</span>
+                                    {sidebarOpen && <span>Buku Besar AKD</span>}
+                                </Link>
+                                <Link href={route('par.index')} className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg transition ${url.includes('/par') ? 'bg-blue-900 text-white shadow-sm' : 'hover:bg-blue-900/50 text-slate-300'}`}>
+                                    <span>🏢</span>
+                                    {sidebarOpen && <span>Buku Besar PAR</span>}
+                                </Link>
+                                <Link href={route('vehicle.index')} className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg transition ${url.includes('/vehicle') ? 'bg-blue-900 text-white shadow-sm' : 'hover:bg-blue-900/50 text-slate-300'}`}>
+                                    <span>🚗</span>
+                                    {sidebarOpen && <span>Buku Besar Vehicle</span>}
+                                </Link>
+                                <Link href={route('varia.index')} className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg transition ${url.includes('/varia') ? 'bg-blue-900 text-white shadow-sm' : 'hover:bg-blue-900/50 text-slate-300'}`}>
+                                    <span>📦</span>
+                                    {sidebarOpen && <span>Buku Besar Varia</span>}
+                                </Link>
+                                <Link href={route('pl.index')} className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg transition ${url.includes('/pl') ? 'bg-blue-900 text-white shadow-sm' : 'hover:bg-blue-900/50 text-slate-300'}`}>
+                                    <span>⚖️</span>
+                                    {sidebarOpen && <span>Buku Besar PL</span>}
+                                </Link>
+                                <Link href={route('surety.index')} className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg transition ${url.includes('/surety-bond') ? 'bg-blue-900 text-white shadow-sm' : 'hover:bg-blue-900/50 text-slate-300'}`}>
+                                    <span>📝</span>
+                                    {sidebarOpen && <span>Buku Besar Surety Bond</span>}
+                                </Link>
+                            </>
+                        )}
+                    </nav>
                 </div>
-            </nav>
 
-            {header && (
-                <header className="bg-white shadow">
-                    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-                        {header}
-                    </div>
+                <div className="p-3 bg-blue-950/80 border-t border-blue-900/50">
+                    {sidebarOpen && (
+                        <div className="flex items-center justify-between">
+                            <div className="truncate">
+                                <div className="text-xs font-bold text-white truncate">{user?.name}</div>
+                                <div className="text-[10px] text-amber-400 uppercase">
+                                    {isKepalaStaff ? 'Kepala Staff' : 'Staff Underwriting'}
+                                </div>
+                            </div>
+                            <Link href={route('logout')} method="post" as="button" className="text-[10px] bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded">
+                                Logout
+                            </Link>
+                        </div>
+                    )}
+                </div>
+            </aside>
+
+            {/* MAIN CONTENT AREA */}
+            <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+                <header className="bg-white shadow-xs border-b border-slate-200 h-16 flex items-center justify-between px-6 z-10">
+                    <div className="flex items-center">{header}</div>
+
+                    <NotificationBell />
                 </header>
-            )}
 
-            <main>{children}</main>
+                <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-100">
+                    {children}
+                </main>
+            </div>
+
         </div>
     );
 }

@@ -11,19 +11,40 @@ return new class extends Migration
         Schema::create('public_liability_registers', function (Blueprint $table) {
             $table->id();
             
+            // Data Utama PL
             $table->date('tgl_input');
-            $table->string('cob_toc'); // Jenis COB / TOC (Contoh: Public Liability, ATJP, Asuransi Pelayanan Umum)
+            $table->string('no_surat')->nullable(); // Wajib untuk gudang surat
+            $table->string('cob_toc'); // Jenis COB / TOC
             $table->text('tertanggung'); // Tertanggung & Alamat
-            $table->string('no_polis')->unique(); // No. CI / No. Polis / Cert No.[cite: 6]
-            $table->date('periode_awal'); // Periode Mulai[cite: 6]
-            $table->date('periode_akhir'); // Periode Selesai[cite: 6]
-            $table->decimal('tsi', 20, 2)->default(0); // TSI[cite: 6]
-            $table->string('share')->default('100%'); // Share (%)[cite: 6]
-            $table->decimal('premi', 20, 2)->default(0); // Jumlah Premi[cite: 6]
-            $table->date('jatuh_tempo')->nullable(); // Tgl. Jatuh Tempo Pembayaran[cite: 6]
-            $table->string('agen')->nullable(); // Agen / Broker / Direct[cite: 6]
-            $table->string('pic')->nullable(); // PIC Branch Office[cite: 6]
+            $table->string('no_polis')->unique()->nullable(); 
+            $table->date('periode_awal'); 
+            $table->date('periode_akhir'); 
             
+            // Keuangan
+            $table->decimal('tsi', 20, 2)->default(0); 
+            $table->string('share')->default('100%'); 
+            $table->decimal('premi', 20, 2)->default(0); 
+            $table->date('jatuh_tempo')->nullable(); 
+            $table->string('agen')->nullable(); 
+            $table->string('pic')->nullable(); 
+            
+            // ==========================================
+            // KOLOM WORKFLOW & E-REGISTER WAJIB
+            // ==========================================
+            $table->json('nomor_surat_array')->nullable();
+            $table->string('scan_polis')->nullable();
+            $table->string('status_approval')->default('Pending Kepala Staff');
+            $table->string('status_serah_terima')->default('Belum Diserahkan');
+            $table->unsignedBigInteger('created_by')->nullable();
+            
+            // Log & Tanda Terima Workflow
+            $table->timestamp('paraf_timestamp')->nullable();
+            $table->string('paraf_oleh')->nullable();
+            $table->string('bukti_terima')->nullable();
+            $table->timestamp('tanggal_terima')->nullable();
+
+            $table->string('kondisi_surat')->default('Normal'); // Pilihan: Normal, Rusak, Parsial
+            $table->text('keterangan_audit')->nullable();       // Catatan khusus jika ada salah cetak/rusak
             $table->timestamps();
         });
     }
